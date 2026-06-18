@@ -1,314 +1,367 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
-import 'dart:ui';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'api_config.dart';
+import 'splash.dart';
 
-class AttackPage extends StatefulWidget {
-  final String username;
-  final String password;
-  final String sessionKey;
-  final List<Map<String, dynamic>> listBug;
-  final String role;
-  final String expiredDate;
+// ─── Palette: Dark Premium dengan Warna Cerah (Tanpa Hitam) ──────────────────
+class _C {
+  // Background - navy/indigo tones
+  static const bg         = Color(0xFF0B1120);    // navy gelap
+  static const surface    = Color(0xFF111827);    // slate gelap
+  static const card       = Color(0xFF1E293B);    // slate medium
+  static const border     = Color(0xFF334155);    // slate terang
+  static const borderLit  = Color(0xFF475569);    // slate lebih terang
 
-  const AttackPage({
-    super.key,
-    required this.username,
-    required this.password,
-    required this.sessionKey,
-    required this.listBug,
-    required this.role,
-    required this.expiredDate,
-  });
+  // Warna aksen - biru, cyan, emas (cerah)
+  static const steel      = Color(0xFF60A5FA);    // biru terang
+  static const blueMid    = Color(0xFF3B82F6);    // biru medium
+  static const blueLight  = Color(0xFF93C5FD);    // biru muda
+  static const chrome     = Color(0xFF38BDF8);    // cyan
+  static const frost      = Color(0xFFBAE6FD);    // cyan muda
 
-  @override
-  State<AttackPage> createState() => _AttackPageState();
+  // Warna status
+  static const green      = Color(0xFF22C55E);
+  static const amber      = Color(0xFFF59E0B);
+  static const red        = Color(0xFFEF4444);
+
+  // Teks
+  static const text       = Color(0xFFF3F4F6);    // putih
+  static const textSub    = Color(0xFF9CA3AF);    // abu terang
+  static const textDim    = Color(0xFF6B7280);    // abu medium
+
+  // Gradien
+  static const LinearGradient metalGrad = LinearGradient(
+    colors: [Color(0xFF2563EB), Color(0xFF1D4ED8), Color(0xFF1E3A8A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  
+  static const LinearGradient accentGrad = LinearGradient(
+    colors: [Color(0xFF38BDF8), Color(0xFF3B82F6), Color(0xFF6366F1)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
-class _AttackPageState extends State<AttackPage> with TickerProviderStateMixin {
-  final targetController = TextEditingController();
-  static const String baseUrl = "http://guntur-jier.hoshino.my.id:10556";
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
-  // Animation controllers
-  late AnimationController _buttonController;
-  late AnimationController _fadeController;
-  late AnimationController _slideController;
-  late AnimationController _glowController;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _glowAnimation;
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
 
-  // Video controllers
-  late VideoPlayerController _videoController;
-  bool _videoInitialized = false;
-  bool _videoError = false;
+class _LoginPageState extends State<LoginPage>
+    with TickerProviderStateMixin {
+  final userCtrl    = TextEditingController();
+  final passCtrl    = TextEditingController();
+  final _formKey    = GlobalKey<FormState>();
 
-  // State variables
-  String selectedBugId = "";
-  bool _isSending = false;
-  bool _isSuccess = false;
-  int _activeStep = 0;
+  bool _isLoading       = false;
+  bool _obscurePass     = true;
+  String? _androidId;
 
-  // COLOR THEME: Abu-abu Menyala (Bright Gray)
-  final Color _themeColor = const Color(0xFFD6D6D6);
+  // Animations
+  late AnimationController _bgCtrl;
+  late AnimationController _entranceCtrl;
+  late AnimationController _logoCtrl;
+  late AnimationController _btnCtrl;
+  late AnimationController _shakeCtrl;
+
+  late Animation<double> _fade;
+  late Animation<Offset>  _slide;
+  late Animation<double>  _logoGlow;
+  late Animation<double>  _btnPulse;
+  late Animation<double>  _shake;
 
   @override
   void initState() {
     super.initState();
-    _initializeAnimations();
-    _initializeVideoController();
-    _setDefaultBug();
-    _startAnimations();
-  }
 
-  void _initializeAnimations() {
-    _buttonController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
+    _bgCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 18))
+      ..repeat();
 
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _entranceCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1000));
+    _fade  = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+        .animate(CurvedAnimation(
+            parent: _entranceCtrl, curve: Curves.easeOutCubic));
 
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
+    _logoCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2200))
+      ..repeat(reverse: true);
+    _logoGlow = Tween<double>(begin: 0.4, end: 1.0)
+        .animate(CurvedAnimation(parent: _logoCtrl, curve: Curves.easeInOut));
 
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
+    _btnCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat(reverse: true);
+    _btnPulse = Tween<double>(begin: 1.0, end: 1.05)
+        .animate(CurvedAnimation(parent: _btnCtrl, curve: Curves.easeInOut));
 
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _buttonController, curve: Curves.easeInOut),
-    );
+    _shakeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    _shake = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -8.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8.0, end: -5.0),  weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -5.0, end: 5.0),   weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 5.0, end: 0.0),    weight: 1),
+    ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.easeInOut));
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
-
-    _glowAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-  }
-
-  void _startAnimations() {
-    _fadeController.forward();
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _slideController.forward();
-    });
-  }
-
-  void _setDefaultBug() {
-    if (widget.listBug.isNotEmpty) {
-      selectedBugId = widget.listBug[0]['bug_id'];
-    }
-  }
-
-  void _initializeVideoController() {
-    try {
-      _videoController = VideoPlayerController.asset('assets/videos/banner.mp4')
-        ..initialize().then((_) {
-          if (mounted) {
-            setState(() {
-              _videoInitialized = true;
-            });
-            _videoController.setLooping(true);
-            _videoController.play();
-            _videoController.setVolume(0);
-          }
-        }).catchError((error) {
-          print('Video initialization error: $error');
-          if (mounted) {
-            setState(() {
-              _videoError = true;
-            });
-          }
-        });
-    } catch (e) {
-      print('Video controller creation error: $e');
-      if (mounted) {
-        setState(() {
-          _videoError = true;
-        });
-      }
-    }
-  }
-
-  String? formatPhoneNumber(String input) {
-    final cleaned = input.replaceAll(RegExp(r'[^\d]'), '');
-    if (cleaned.startsWith('0') || cleaned.length < 8) return null;
-    return cleaned;
-  }
-
-  Future<void> _sendBug() async {
-    if (_isSending) return;
-
-    setState(() {
-      _isSending = true;
-      _activeStep = 1;
-    });
-
-    _buttonController.forward().then((_) {
-      _buttonController.reverse();
-    });
-
-    final rawInput = targetController.text.trim();
-    final target = formatPhoneNumber(rawInput);
-    final key = widget.sessionKey;
-
-    if (target == null || key.isEmpty) {
-      _showAlert("❌ Invalid Number", "Gunakan nomor internasional (misal: +62, 1, 44), bukan 08xxx.");
-      setState(() {
-        _isSending = false;
-        _activeStep = 0;
-      });
-      return;
-    }
-
-    try {
-      final res = await http.get(Uri.parse("$baseUrl/api/whatsapp/sendBug?key=$key&target=$target&bug=$selectedBugId"));
-      final data = jsonDecode(res.body);
-
-      if (data["cooldown"] == true) {
-        _showAlert("⏳ Cooldown", "Tunggu beberapa saat sebelum mengirim lagi.");
-      } else if (data["senderOn"] == false) {
-        _showAlert("⚠️ Gagal", "Gagal mengirim bug. Sender Kosong, Hubungi Seller.");
-      } else if (data["valid"] == false) {
-        _showAlert("❌ Key Invalid", "Session key tidak valid. Silakan login ulang.");
-      } else if (data["sended"] == false) {
-        _showAlert("⚠️ Gagal", "Gagal mengirim bug. Mungkin server sedang maintenance.");
-      } else {
-        setState(() {
-          _activeStep = 2;
-          _isSuccess = true;
-        });
-        _showSuccessPopup(target);
-      }
-    } catch (_) {
-      _showAlert("❌ Error", "Terjadi kesalahan. Coba lagi.");
-    } finally {
-      setState(() {
-        _isSending = false;
-        if (!_isSuccess) _activeStep = 0;
-      });
-    }
-  }
-
-  void _showSuccessPopup(String target) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => SuccessVideoDialog(
-        target: target,
-        onDismiss: () {
-          Navigator.of(context).pop();
-          setState(() {
-            _isSuccess = false;
-            _activeStep = 0;
-          });
-        },
-      ),
-    );
-  }
-
-  void _showAlert(String title, String msg) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black.withOpacity(0.9),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: _themeColor.withOpacity(0.3), width: 1),
-        ),
-        title: Text(title, style: const TextStyle(color: Colors.white, fontFamily: 'Orbitron')),
-        content: Text(msg, style: const TextStyle(color: Colors.white70, fontFamily: 'ShareTechMono')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("OK", style: TextStyle(color: _themeColor)),
-          )
-        ],
-      ),
-    );
+    _entranceCtrl.forward();
+    _initLogin();
   }
 
   @override
+  void dispose() {
+    _bgCtrl.dispose();
+    _entranceCtrl.dispose();
+    _logoCtrl.dispose();
+    _btnCtrl.dispose();
+    _shakeCtrl.dispose();
+    userCtrl.dispose();
+    passCtrl.dispose();
+    super.dispose();
+  }
+
+  // ─── Init auto-login ──────────────────────────────────────────────────────
+  Future<void> _initLogin() async {
+    final info = await DeviceInfoPlugin().androidInfo;
+    _androidId = info.id;
+
+    final prefs    = await SharedPreferences.getInstance();
+    final savedUser = prefs.getString('username');
+    final savedPass = prefs.getString('password');
+    final savedKey  = prefs.getString('key');
+
+    if (savedUser != null && savedPass != null && savedKey != null) {
+      try {
+        final res  = await http.get(Uri.parse(
+            '$baseUrl/myInfo?username=$savedUser&password=$savedPass&androidId=$_androidId&key=$savedKey'));
+        final data = jsonDecode(res.body);
+
+        if (data['valid'] == true && mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => SplashScreen(
+              username: savedUser, password: savedPass,
+              role: data['role'], sessionKey: data['key'],
+              expiredDate: data['expiredDate'],
+              listBug:  _parseList(data['listBug']),
+              listDoos: _parseList(data['listDDoS']),
+              news:     _parseList(data['news']),
+            )),
+          );
+        }
+      } catch (_) {}
+    }
+  }
+
+  List<Map<String, dynamic>> _parseList(dynamic raw) =>
+      (raw as List? ?? []).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+  // ─── Login ────────────────────────────────────────────────────────────────
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final username = userCtrl.text.trim();
+    final password = passCtrl.text.trim();
+
+    setState(() => _isLoading = true);
+
+    try {
+      final res  = await http.post(Uri.parse('$baseUrl/validate'), body: {
+        'username': username,
+        'password': password,
+        'androidId': _androidId ?? 'unknown',
+      });
+      final data = jsonDecode(res.body);
+
+      if (data['expired'] == true) {
+        _shakeCtrl.forward(from: 0);
+        _showAlert(
+          title:   'Akses Habis',
+          message: 'Masa akses Anda telah berakhir. Silakan perpanjang.',
+          type:    _AlertType.warning,
+          showContact: true,
+        );
+      } else if (data['valid'] != true) {
+        _shakeCtrl.forward(from: 0);
+        final msg = (data['message'] ?? '').toString().toLowerCase();
+        if (msg.contains('perangkat') || msg.contains('device') ||
+            msg.contains('another')) {
+          _showAlert(
+            title:   'Sesi Aktif',
+            message: 'Akun ini sedang login di perangkat lain.',
+            type:    _AlertType.warning,
+          );
+        } else {
+          _showAlert(
+            title:   'Login Gagal',
+            message: 'Username atau password salah.',
+            type:    _AlertType.error,
+          );
+        }
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        prefs.setString('username', username);
+        prefs.setString('password', password);
+        prefs.setString('key', data['key']);
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => SplashScreen(
+              username: username, password: password,
+              role: data['role'], sessionKey: data['key'],
+              expiredDate: data['expiredDate'],
+              listBug:  _parseList(data['listBug']),
+              listDoos: _parseList(data['listDDoS']),
+              news:     _parseList(data['news']),
+            )),
+          );
+        }
+      }
+    } catch (_) {
+      _shakeCtrl.forward(from: 0);
+      _showAlert(
+        title:   'Koneksi Error',
+        message: 'Gagal terhubung ke server. Periksa jaringan Anda.',
+        type:    _AlertType.error,
+      );
+    }
+
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  // ─── Alert dialog ─────────────────────────────────────────────────────────
+  void _showAlert({
+    required String title,
+    required String message,
+    required _AlertType type,
+    bool showContact = false,
+  }) {
+    final color = switch (type) {
+      _AlertType.error   => _C.red,
+      _AlertType.warning => _C.amber,
+      _AlertType.success => _C.green,
+    };
+    final icon = switch (type) {
+      _AlertType.error   => Icons.error_rounded,
+      _AlertType.warning => Icons.warning_amber_rounded,
+      _AlertType.success => Icons.check_circle_rounded,
+    };
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 320),
+      transitionBuilder: (_, anim, __, child) => ScaleTransition(
+        scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+        child: FadeTransition(opacity: anim, child: child),
+      ),
+      pageBuilder: (ctx, _, __) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_C.card, _C.surface],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+            boxShadow: [
+              BoxShadow(color: color.withOpacity(0.15), blurRadius: 50),
+            ],
+          ),
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withOpacity(0.1),
+                border: Border.all(color: color.withOpacity(0.3)),
+              ),
+              child: Icon(icon, color: color, size: 30),
+            ),
+            const SizedBox(height: 18),
+            Text(title, style: const TextStyle(color: _C.text,
+                fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            Text(message, textAlign: TextAlign.center,
+                style: const TextStyle(color: _C.textSub,
+                    fontSize: 13, height: 1.5)),
+            const SizedBox(height: 24),
+            if (showContact) ...[
+              _GradBtn(
+                label: 'HUBUNGI ADMIN',
+                fullWidth: true,
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await launchUrl(Uri.parse('https://t.me/maklongemis'),
+                      mode: LaunchMode.externalApplication);
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+            _OutlineBtn(
+              label: showContact ? 'TUTUP' : 'OK',
+              fullWidth: true,
+              onTap: () => Navigator.pop(ctx),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: _C.bg,
       body: Stack(
         children: [
-          // Animated background
-          _buildAnimatedBackground(),
-
-          // Gradient overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.7),
-                  Colors.black.withOpacity(0.85),
-                  Colors.black,
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-
-          // Main content
+          Positioned.fill(child: _AnimatedBg(controller: _bgCtrl)),
           SafeArea(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
+            child: FadeTransition(
+              opacity: _fade,
+              child: SlideTransition(
+                position: _slide,
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 24),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // User info header with glassmorphism
-                        _buildUserInfoHeader(),
-
-                        const SizedBox(height: 20),
-
-                        // Progress indicator
-                        _buildProgressIndicator(),
-
-                        const SizedBox(height: 20),
-
-                        // Main content cards
-                        _buildTargetInputCard(),
-
-                        const SizedBox(height: 14),
-
-                        _buildPayloadTypeCard(),
-
-                        const SizedBox(height: 20),
-
-                        _buildStatusIndicators(),
-
-                        const SizedBox(height: 20),
-
-                        _buildSendButton(),
-
-                        const SizedBox(height: 14),
-
-                        _buildFooterInfo(),
+                        _buildLogo(),
+                        const SizedBox(height: 28),
+                        _buildHeading(),
+                        const SizedBox(height: 32),
+                        AnimatedBuilder(
+                          animation: _shake,
+                          builder: (_, child) => Transform.translate(
+                            offset: Offset(_shake.value, 0),
+                            child: child,
+                          ),
+                          child: _buildForm(),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildFooter(),
                       ],
                     ),
                   ),
@@ -321,1094 +374,829 @@ class _AttackPageState extends State<AttackPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAnimatedBackground() {
-    return _videoInitialized && !_videoError
-        ? SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _videoController.value.size.width,
-          height: _videoController.value.size.height,
-          child: VideoPlayer(_videoController),
+  // ─── Logo ─────────────────────────────────────────────────────────────────
+  Widget _buildLogo() {
+    return AnimatedBuilder(
+      animation: _logoGlow,
+      builder: (_, __) => Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer ring glow
+          Container(
+            width: 130, height: 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  _C.blueMid.withOpacity(_logoGlow.value * 0.15),
+                  Colors.transparent,
+                ],
+                radius: 0.8,
+              ),
+            ),
+          ),
+          // Outer ring
+          Container(
+            width: 110, height: 110,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _C.blueMid.withOpacity(_logoGlow.value * 0.3),
+                width: 1.5,
+              ),
+            ),
+          ),
+          // Mid ring
+          Container(
+            width: 92, height: 92,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _C.blueLight.withOpacity(_logoGlow.value * 0.5),
+                width: 2,
+              ),
+            ),
+          ),
+          // Core
+          Hero(
+            tag: 'logo',
+            child: Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E293B), Color(0xFF111827)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(
+                  color: _C.blueLight.withOpacity(_logoGlow.value * 0.8),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _C.blueMid.withOpacity(_logoGlow.value * 0.6),
+                    blurRadius: 30,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Image.asset('assets/images/logo.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.rocket_rounded, color: _C.blueLight, size: 40)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeading() {
+    return Column(children: [
+      ShaderMask(
+        shaderCallback: (b) => const LinearGradient(
+          colors: [Color(0xFF60A5FA), Color(0xFF38BDF8), Color(0xFFA78BFA)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(b),
+        child: const Text(
+          'ASTRAL ENGINE',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            letterSpacing: 1,
+          ),
         ),
       ),
-    )
-        : Container(
-      decoration: const BoxDecoration(
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: _C.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _C.border, width: 1),
+        ),
+        child: const Text('Masuk untuk melanjutkan',
+            style: TextStyle(color: _C.textSub, fontSize: 13,
+                fontWeight: FontWeight.w500)),
+      ),
+    ]);
+  }
+
+  // ─── Form ─────────────────────────────────────────────────────────────────
+  Widget _buildForm() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF0A0A0A),
-            Color(0xFF121212),
-            Color(0xFF1A1A1A),
-          ],
+          colors: [_C.card, _C.surface],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-      ),
-      child: Stack(
-        children: [
-          // Animated particles with gray theme
-          ...List.generate(15, (index) {
-            final size = (index % 5 + 1) * 2.0;
-            final opacity = (index % 5 + 1) / 10.0;
-            return AnimatedBuilder(
-              animation: _glowController,
-              builder: (context, child) {
-                return Positioned(
-                  left: (index * 73.0) % MediaQuery.of(context).size.width,
-                  top: (index * 137.0) % MediaQuery.of(context).size.height,
-                  child: Container(
-                    width: size,
-                    height: size,
-                    decoration: BoxDecoration(
-                      color: _themeColor.withOpacity(opacity * _glowAnimation.value),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                );
-              },
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressIndicator() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
-        children: [
-          _buildStepIndicator(0, "Input", FontAwesomeIcons.edit),
-          _buildProgressLine(),
-          _buildStepIndicator(1, "Process", FontAwesomeIcons.cogs),
-          _buildProgressLine(),
-          _buildStepIndicator(2, "Complete", FontAwesomeIcons.checkCircle),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepIndicator(int step, String label, IconData icon) {
-    final isActive = _activeStep >= step;
-    final isCurrent = _activeStep == step;
-
-    return Expanded(
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? (isCurrent
-                  ? _themeColor.withOpacity(0.2)
-                  : _themeColor.withOpacity(0.2))
-                  : Colors.white.withOpacity(0.05),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isActive
-                    ? (isCurrent
-                    ? _themeColor.withOpacity(0.5)
-                    : _themeColor.withOpacity(0.5))
-                    : Colors.white.withOpacity(0.2),
-                width: 2,
-              ),
-              boxShadow: isCurrent
-                  ? [
-                BoxShadow(
-                  color: _themeColor.withOpacity(0.2 * _glowAnimation.value),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                )
-              ]
-                  : null,
-            ),
-            child: Icon(
-              icon,
-              color: isActive
-                  ? (isCurrent ? Colors.white : _themeColor)
-                  : Colors.white.withOpacity(0.4),
-              size: 18,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: isActive
-                  ? (isCurrent ? Colors.white : _themeColor)
-                  : Colors.white.withOpacity(0.4),
-              fontSize: 11,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressLine() {
-    return Expanded(
-      child: Container(
-        height: 2,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: _activeStep > 0
-                ? [_themeColor, _themeColor.withOpacity(0.3)]
-                : [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.1)],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserInfoHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _C.border, width: 1),
         boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
+          BoxShadow(color: _C.blueMid.withOpacity(0.1),
+              blurRadius: 40, offset: const Offset(0, 15)),
         ],
       ),
-      child: Row(
-        children: [
-          // User avatar with glow effect
-          AnimatedBuilder(
-            animation: _glowController,
-            builder: (context, child) {
-              return Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: _themeColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _themeColor.withOpacity(0.3 * _glowAnimation.value),
-                    width: 2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _themeColor.withOpacity(0.1 * _glowAnimation.value),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  FontAwesomeIcons.userShield,
-                  color: _themeColor,
-                  size: 20,
-                ),
-              );
-            },
-          ),
-
-          const SizedBox(width: 14),
-
-          // User info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.username,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Orbitron',
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _getRoleColor().withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: _getRoleColor().withOpacity(0.5),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    widget.role.toUpperCase(),
-                    style: TextStyle(
-                      color: _getRoleColor(),
-                      fontSize: 11,
-                      fontFamily: 'ShareTechMono',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Expiry date
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  FontAwesomeIcons.calendarAlt,
-                  color: Colors.white,
-                  size: 14,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  "EXP",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 9,
-                    fontFamily: 'ShareTechMono',
-                  ),
-                ),
-                Text(
-                  widget.expiredDate,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontFamily: 'ShareTechMono',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getRoleColor() {
-    switch (widget.role.toLowerCase()) {
-      case 'owner':
-        return Colors.red;
-      case 'high owner':
-        return Colors.red;
-      case 'vip':
-        return Colors.amber;
-      case 'reseller':
-        return Colors.blue;
-      default:
-        return _themeColor;
-    }
-  }
-
-  Widget _buildTargetInputCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  FontAwesomeIcons.phone,
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                "Target Number",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: targetController,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
-            cursorColor: Colors.white,
-            decoration: InputDecoration(
-              hintText: "e.g. +62xxxxxxxxx",
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.1),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: _themeColor, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              prefixIcon: Container(
-                margin: const EdgeInsets.all(10),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  FontAwesomeIcons.globe,
-                  color: Colors.white70,
-                  size: 16,
-                ),
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            "Use international format without 0 or +",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 11,
-              fontFamily: 'ShareTechMono',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPayloadTypeCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  FontAwesomeIcons.whatsapp,
-                  color: Colors.white,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                "Bug Type",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                dropdownColor: Colors.black.withOpacity(0.9),
-                value: selectedBugId,
-                isExpanded: true,
-                iconEnabledColor: Colors.white,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                items: widget.listBug.map((bug) {
-                  return DropdownMenuItem<String>(
-                    value: bug['bug_id'],
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 40),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: _themeColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Icon(
-                              FontAwesomeIcons.virus,
-                              color: _themeColor,
-                              size: 14,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  bug['bug_name'],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    height: 1.2,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (bug['description'] != null)
-                                  Text(
-                                    bug['description'],
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.6),
-                                      fontSize: 11,
-                                      height: 1.2,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedBugId = value!;
-                  });
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(
-                FontAwesomeIcons.infoCircle,
-                color: Colors.white.withOpacity(0.5),
-                size: 12,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  "Select the appropriate bug type for maximum effectiveness",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 11,
-                    fontFamily: 'ShareTechMono',
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-  Widget _buildStatusIndicators() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.05),
-            blurRadius: 10,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "System Status",
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'Orbitron',
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _statusIndicator(
-                icon: FontAwesomeIcons.server,
-                label: "Server",
-                isOnline: true,
-              ),
-              _statusIndicator(
-                icon: FontAwesomeIcons.shieldAlt,
-                label: "Security",
-                isOnline: true,
-              ),
-              _statusIndicator(
-                icon: FontAwesomeIcons.database,
-                label: "Database",
-                isOnline: true,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusIndicator({required IconData icon, required String label, required bool isOnline}) {
-    return Column(
-      children: [
-        AnimatedBuilder(
-          animation: _glowController,
-          builder: (context, child) {
-            return Container(
-              padding: const EdgeInsets.all(10),
+      child: Form(
+        key: _formKey,
+        child: Column(children: [
+          // Section header with icon
+          Row(children: [
+            Container(
+              width: 5, height: 20,
               decoration: BoxDecoration(
-                color: isOnline
-                    ? Colors.white.withOpacity(0.1 + 0.1 * _glowAnimation.value)
-                    : Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isOnline
-                      ? Colors.white.withOpacity(0.3 + 0.2 * _glowAnimation.value)
-                      : Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-                boxShadow: isOnline
-                    ? [
-                  BoxShadow(
-                    color: _themeColor.withOpacity(0.1 * _glowAnimation.value),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  )
-                ]
-                    : null,
+                gradient: _C.accentGrad,
+                borderRadius: BorderRadius.circular(3),
               ),
-              child: Icon(
-                icon,
-                color: isOnline ? Colors.white : Colors.white70,
-                size: 20,
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 11,
-            fontFamily: 'ShareTechMono',
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: 50,
-          height: 3,
-          decoration: BoxDecoration(
-            color: isOnline ? _themeColor : Colors.red.withOpacity(0.5),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      ],
-    );
-  }
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.account_circle_rounded,
+                color: _C.blueMid, size: 18),
+            const SizedBox(width: 8),
+            const Text('KREDENSIAL AKUN',
+                style: TextStyle(color: _C.text, fontSize: 13,
+                    fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+          ]),
+          const SizedBox(height: 22),
 
-  Widget _buildSendButton() {
-    return AnimatedBuilder(
-      animation: _scaleAnimation,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Container(
-            width: double.infinity,
-            height: 56,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: _themeColor.withOpacity(0.3),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _themeColor.withOpacity(0.1),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: ElevatedButton.icon(
-              icon: _isSending
-                  ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-                  : const Icon(FontAwesomeIcons.paperPlane, color: Colors.white, size: 18),
-              label: Text(
-                _isSending ? "SENDING..." : "SEND BUG",
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontFamily: 'Orbitron',
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.4,
-                  color: Colors.white,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: Colors.white,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              onPressed: _isSending ? null : _sendBug,
-            ),
+          // Username
+          _LoginField(
+            controller: userCtrl,
+            label: 'Username',
+            icon: Icons.person_outline_rounded,
+            validator: (v) => (v == null || v.isEmpty)
+                ? 'Username tidak boleh kosong' : null,
           ),
-        );
-      },
-    );
-  }
+          const SizedBox(height: 16),
 
-  Widget _buildFooterInfo() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            FontAwesomeIcons.exclamationTriangle,
-            color: Colors.white.withOpacity(0.5),
-            size: 14,
+          // Password
+          _LoginField(
+            controller: passCtrl,
+            label: 'Password',
+            icon: Icons.lock_outline_rounded,
+            obscure: _obscurePass,
+            onToggleObscure: () =>
+                setState(() => _obscurePass = !_obscurePass),
+            validator: (v) => (v == null || v.isEmpty)
+                ? 'Password tidak boleh kosong' : null,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              "Use this tool responsibly. We are not responsible for any misuse.",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 11,
-                fontFamily: 'ShareTechMono',
-              ),
-            ),
+          const SizedBox(height: 28),
+
+          // Submit
+          _LoginButton(
+            isLoading: _isLoading,
+            pulseAnim: _btnPulse,
+            onTap: _login,
           ),
-        ],
+        ]),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _buttonController.dispose();
-    _fadeController.dispose();
-    _slideController.dispose();
-    _glowController.dispose();
-    _videoController.dispose();
-    targetController.dispose();
-    super.dispose();
+  Widget _buildFooter() {
+    return Column(children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Text('Belum punya akses? ',
+            style: TextStyle(color: _C.textSub, fontSize: 13)),
+        GestureDetector(
+          onTap: () => launchUrl(
+              Uri.parse('https://t.me/maklongemis'),
+              mode: LaunchMode.externalApplication),
+          child: ShaderMask(
+            shaderCallback: (b) => _C.accentGrad.createShader(b),
+            child: const Text('BELI SEKARANG',
+                style: TextStyle(color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 24),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.circle, color: _C.blueMid, size: 5),
+        const SizedBox(width: 8),
+        const Text('© 2026 ASTRAL ENGINE',
+            style: TextStyle(color: _C.textDim, fontSize: 11,
+                fontWeight: FontWeight.w500, letterSpacing: 0.5)),
+        const SizedBox(width: 8),
+        Icon(Icons.circle, color: _C.blueMid, size: 5),
+      ]),
+    ]);
   }
 }
 
-// Custom success dialog with video
-class SuccessVideoDialog extends StatefulWidget {
-  final String target;
-  final VoidCallback onDismiss;
+// ─── Login Field ──────────────────────────────────────────────────────────────
+class _LoginField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final bool obscure;
+  final VoidCallback? onToggleObscure;
+  final String? Function(String?)? validator;
 
-  const SuccessVideoDialog({
-    super.key,
-    required this.target,
-    required this.onDismiss,
+  const _LoginField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.obscure = false,
+    this.onToggleObscure,
+    this.validator,
   });
 
   @override
-  State<SuccessVideoDialog> createState() => _SuccessVideoDialogState();
+  State<_LoginField> createState() => _LoginFieldState();
 }
 
-class _SuccessVideoDialogState extends State<SuccessVideoDialog> with TickerProviderStateMixin {
-  late VideoPlayerController _successVideoController;
-  late AnimationController _fadeController;
-  late AnimationController _scaleController;
-  late AnimationController _glowController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _glowAnimation;
-  bool _showSuccessInfo = false;
-  bool _videoError = false;
-  bool _videoInitialized = false;
-
-  // COLOR THEME: Abu-abu Menyala
-  final Color _themeColor = const Color(0xFFD6D6D6);
+class _LoginFieldState extends State<_LoginField> {
+  bool _focused = false;
+  final _focus = FocusNode();
 
   @override
   void initState() {
     super.initState();
-
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-
-    _scaleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _fadeController, curve: Curves.easeIn),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
-    );
-
-    _glowAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-
-    _initializeSuccessVideo();
+    _focus.addListener(() => setState(() => _focused = _focus.hasFocus));
   }
 
-  void _initializeSuccessVideo() {
-    try {
-      _successVideoController = VideoPlayerController.asset('assets/videos/splash.mp4')
-        ..initialize().then((_) {
-          if (mounted) {
-            setState(() {
-              _videoInitialized = true;
-            });
-            _successVideoController.play();
+  @override
+  void dispose() { _focus.dispose(); super.dispose(); }
 
-            // Listen for video completion
-            _successVideoController.addListener(() {
-              if (_successVideoController.value.position >= _successVideoController.value.duration) {
-                _showSuccessMessage();
-              }
-            });
-          }
-        }).catchError((error) {
-          print('Success video error: $error');
-          if (mounted) {
-            setState(() {
-              _videoError = true;
-            });
-            // Show success message immediately if video fails
-            Future.delayed(const Duration(milliseconds: 500), () {
-              _showSuccessMessage();
-            });
-          }
-        });
-    } catch (e) {
-      print('Video controller error: $e');
-      if (mounted) {
-        setState(() {
-          _videoError = true;
-        });
-        // Show success message immediately if video fails
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _showSuccessMessage();
-        });
-      }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: _C.bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _focused ? _C.blueMid : _C.border,
+          width: _focused ? 1.5 : 1.0,
+        ),
+        boxShadow: _focused
+            ? [BoxShadow(color: _C.blueMid.withOpacity(0.15),
+                blurRadius: 16, offset: const Offset(0, 4))]
+            : [],
+      ),
+      child: TextFormField(
+        controller: widget.controller,
+        focusNode: _focus,
+        obscureText: widget.obscure,
+        validator: widget.validator,
+        style: const TextStyle(color: _C.text, fontSize: 15,
+            fontWeight: FontWeight.w500),
+        cursorColor: _C.blueMid,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          labelStyle: TextStyle(color: _focused ? _C.blueLight : _C.textSub, 
+              fontSize: 13, fontWeight: FontWeight.w500),
+          floatingLabelStyle:
+              const TextStyle(color: _C.blueMid, fontSize: 11),
+          prefixIcon: Icon(widget.icon,
+              color: _focused ? _C.blueLight : _C.textSub, size: 20),
+          suffixIcon: widget.onToggleObscure != null
+              ? IconButton(
+                  icon: Icon(
+                    widget.obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: _focused ? _C.blueLight : _C.textSub, size: 20,
+                  ),
+                  onPressed: widget.onToggleObscure,
+                )
+              : null,
+          errorStyle: const TextStyle(color: _C.red, fontSize: 11),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Login Button ─────────────────────────────────────────────────────────────
+class _LoginButton extends StatefulWidget {
+  final bool isLoading;
+  final Animation<double> pulseAnim;
+  final VoidCallback onTap;
+
+  const _LoginButton({
+    required this.isLoading,
+    required this.pulseAnim,
+    required this.onTap,
+  });
+
+  @override
+  State<_LoginButton> createState() => _LoginButtonState();
+}
+
+class _LoginButtonState extends State<_LoginButton> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) {
+        setState(() => _down = false);
+        if (!widget.isLoading) widget.onTap();
+      },
+      onTapCancel: () => setState(() => _down = false),
+      child: AnimatedBuilder(
+        animation: widget.pulseAnim,
+        builder: (_, __) => Transform.scale(
+          scale: widget.isLoading || _down ? 1.0 : widget.pulseAnim.value,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 56,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: widget.isLoading ? _C.metalGrad : _C.accentGrad,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: _down || widget.isLoading
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: _C.blueMid.withOpacity(
+                            widget.pulseAnim.value * 0.5),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+            ),
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: widget.isLoading
+                    ? const SizedBox(
+                        key: ValueKey('loading'),
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white),
+                      )
+                    : const Row(
+                        key: ValueKey('idle'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.login_rounded,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 12),
+                          Text('MASUK',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              )),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Gradient Button ──────────────────────────────────────────────────────────
+class _GradBtn extends StatefulWidget {
+  final bool fullWidth;
+
+  const _GradBtn({required this.label, required this.onTap,
+      this.fullWidth = false});
+
+  @override
+  State<_GradBtn> createState() => _GradBtnState();
+}
+
+class _GradBtnState extends State<_GradBtn> {
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) { setState(() => _down = false); widget.onTap(); },
+      onTapCancel: () => setState(() => _down = false),
+      child: AnimatedScale(
+        scale: _down ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        child: Container(
+          height: 48,
+          width: widget.fullWidth ? double.infinity : null,
+          decoration: BoxDecoration(
+            gradient: _C.metalGrad,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: _down ? [] : [
+              BoxShadow(color: _C.blueMid.withOpacity(0.4),
+                  blurRadius: 16, offset: const Offset(0, 6)),
+            ],
+          ),
+          child: Center(
+            child: Text(widget.label,
+                style: const TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w800, fontSize: 14,
+                    letterSpacing: 0.5)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Outline Button ───────────────────────────────────────────────────────────
+class _OutlineBtn extends StatefulWidget {
+
+  const _OutlineBtn({required this.label, required this.onTap,
+      this.fullWidth = false});
+
+  @override
+  State<_OutlineBtn> createState() => _OutlineBtnState();
+}
+
+class _OutlineBtnState extends State<_OutlineBtn> {
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _down = true),
+      onTapUp: (_) { setState(() => _down = false); widget.onTap(); },
+      onTapCancel: () => setState(() => _down = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 48,
+        width: widget.fullWidth ? double.infinity : null,
+        decoration: BoxDecoration(
+          color: _down ? _C.border.withOpacity(0.3) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.border, width: 1.5),
+        ),
+        child: Center(
+          child: Text(widget.label,
+              style: const TextStyle(color: _C.textSub,
+                  fontWeight: FontWeight.w700, fontSize: 14,
+                  letterSpacing: 0.5)),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Animated Background ──────────────────────────────────────────────────────
+class _AnimatedBg extends StatelessWidget {
+  final AnimationController controller;
+  const _AnimatedBg({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, __) =>
+          CustomPaint(painter: _BgPainter(controller.value)),
+    );
+  }
+}
+
+class _BgPainter extends CustomPainter {
+  final double t;
+  _BgPainter(this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grid = Paint()
+      ..color = _C.border.withOpacity(0.2)
+      ..strokeWidth = 0.8;
+    const step = 40.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
     }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+    
+    final glow = Paint()
+      ..shader = RadialGradient(colors: [
+        _C.blueMid.withOpacity(0.12 + math.sin(t * math.pi * 2) * 0.04),
+        Colors.transparent,
+      ], radius: 0.75).createShader(Rect.fromCircle(
+          center: Offset(size.width / 2, size.height * 0.35),
+          radius: size.width * 0.7));
+    canvas.drawCircle(
+        Offset(size.width / 2, size.height * 0.35), size.width * 0.7, glow);
+
+    final glow2 = Paint()
+      ..shader = RadialGradient(colors: [
+        _C.chrome.withOpacity(0.08 + math.cos(t * math.pi * 2) * 0.03),
+        Colors.transparent,
+      ], radius: 0.5).createShader(Rect.fromCircle(
+          center: Offset(size.width * 0.15, size.height * 0.75),
+          radius: size.width * 0.4));
+    canvas.drawCircle(
+        Offset(size.width * 0.15, size.height * 0.75), size.width * 0.4, glow2);
   }
 
-  void _showSuccessMessage() {
-    if (mounted) {
-      setState(() {
-        _showSuccessInfo = true;
+  @override
+  bool shouldRepaint(_BgPainter old) => old.t != t;
+}
+
+enum _AlertType { error, warning, success }
+
+// ─── Palette: Biru Tua Metalik (konsisten seluruh app) ───────────────────────
+
+
+class SplashScreen extends StatefulWidget {
+  final String username;
+  final String password;
+  final String role;
+  final String expiredDate;
+  final String sessionKey;
+  final List<Map<String, dynamic>> listBug;
+  final List<Map<String, dynamic>> listDoos;
+  final List<dynamic> news;
+
+  const SplashScreen({
+    super.key,
+    required this.username,
+    required this.password,
+    required this.role,
+    required this.expiredDate,
+    required this.sessionKey,
+    required this.listBug,
+    required this.listDoos,
+    required this.news,
+  });
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
+  late VideoPlayerController _videoCtrl;
+  bool _videoReady = false;
+  bool _fadeOutStarted = false;
+  bool _isSkipped = false;
+
+  // Animations
+  late AnimationController _fadeOutCtrl;   // video fade to black
+  late AnimationController _uiCtrl;        // UI entrance
+  late AnimationController _glowCtrl;      // text glow pulse
+  late AnimationController _ringCtrl;      // rotating ring
+  late AnimationController _progressCtrl;  // loading bar
+  late AnimationController _particleCtrl;  // floating particles
+  late AnimationController _skipBtnCtrl;   // skip button animation
+
+  late Animation<double> _uiFade;
+  late Animation<Offset>  _uiSlide;
+  late Animation<double>  _glowAnim;
+  late Animation<double>  _fadeOut;
+  late Animation<double>  _skipBtnOpacity;
+  late Animation<Offset>  _skipBtnSlide;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+    _initVideo();
+  }
+
+  void _initAnimations() {
+    _fadeOutCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
+    _fadeOut = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _fadeOutCtrl, curve: Curves.easeIn));
+
+    _uiCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200));
+    _uiFade  = CurvedAnimation(parent: _uiCtrl, curve: Curves.easeOut);
+    _uiSlide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _uiCtrl, curve: Curves.easeOutCubic));
+
+    _glowCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2000))
+      ..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.3, end: 1.0)
+        .animate(CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut));
+
+    _ringCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 5))
+      ..repeat();
+
+    _progressCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 4));
+
+    _particleCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 6))
+      ..repeat();
+
+    _skipBtnCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _skipBtnOpacity = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _skipBtnCtrl, curve: Curves.easeOut));
+    _skipBtnSlide = Tween<Offset>(begin: const Offset(0, -0.5), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _skipBtnCtrl, curve: Curves.easeOutCubic));
+    
+    // Show skip button after 0.5 seconds
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _skipBtnCtrl.forward();
+    });
+  }
+
+  void _initVideo() {
+    _videoCtrl = VideoPlayerController.asset('assets/videos/splash.mp4')
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _videoReady = true);
+        _videoCtrl.setLooping(false);
+        _videoCtrl.play();
+
+        // Start UI animations after video loads
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _uiCtrl.forward();
+            _progressCtrl.forward();
+          }
+        });
+
+        _videoCtrl.addListener(_onVideoProgress);
+      }).catchError((_) {
+        // Fallback: no video, still show UI and auto-navigate
+        if (mounted) {
+          setState(() => _videoReady = false);
+          _uiCtrl.forward();
+          _progressCtrl.forward();
+          Future.delayed(const Duration(seconds: 4), _navigate);
+        }
       });
-      _fadeController.forward();
-      _scaleController.forward();
+  }
+
+  void _onVideoProgress() {
+    if (!mounted || _isSkipped) return;
+    final pos = _videoCtrl.value.position;
+    final dur = _videoCtrl.value.duration;
+    if (dur == Duration.zero) return;
+
+    // Start fade-out 1s before end
+    if (pos >= dur - const Duration(seconds: 1) && !_fadeOutStarted) {
+      _fadeOutStarted = true;
+      _fadeOutCtrl.forward();
     }
+
+    // Navigate when done
+    if (pos >= dur) _navigate();
+  }
+
+  void _skip() {
+    if (_isSkipped) return;
+    _isSkipped = true;
+    
+    // Stop video
+    _videoCtrl.pause();
+    _videoCtrl.removeListener(_onVideoProgress);
+    
+    // Start fade out and navigate
+    _fadeOutStarted = true;
+    _fadeOutCtrl.forward().then((_) {
+      if (mounted) _navigate();
+    });
+  }
+
+  void _navigate() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => DashboardPage(
+          username:    widget.username,
+          password:    widget.password,
+          role:        widget.role,
+          expiredDate: widget.expiredDate,
+          sessionKey:  widget.sessionKey,
+          listBug:     widget.listBug,
+          listDoos:    widget.listDoos,
+          news:        widget.news,
+        ),
+        transitionDuration: const Duration(milliseconds: 600),
+        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _successVideoController.dispose();
-    _fadeController.dispose();
-    _scaleController.dispose();
-    _glowController.dispose();
+    _videoCtrl.removeListener(_onVideoProgress);
+    _videoCtrl.dispose();
+    _fadeOutCtrl.dispose();
+    _uiCtrl.dispose();
+    _glowCtrl.dispose();
+    _ringCtrl.dispose();
+    _progressCtrl.dispose();
+    _particleCtrl.dispose();
+    _skipBtnCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get screen dimensions for responsive sizing
-    final screenSize = MediaQuery.of(context).size;
-    final dialogWidth = screenSize.width * 0.9;
-    final dialogHeight = screenSize.height * 0.45;
+    final size = MediaQuery.of(context).size;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.zero,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: dialogWidth,
-          maxHeight: dialogHeight,
-        ),
-        child: Container(
-          width: dialogWidth,
-          height: dialogHeight,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.95),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: _themeColor.withOpacity(0.3),
-              width: 1,
+    return Scaffold(
+      backgroundColor: _C.bg,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ── Particles background ─────────────────────────────────────
+          AnimatedBuilder(
+            animation: _particleCtrl,
+            builder: (_, __) => CustomPaint(
+              painter: _ParticlePainter(_particleCtrl.value),
+              size: size,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: _themeColor.withOpacity(0.1),
-                blurRadius: 15,
-                spreadRadius: 3,
-              ),
-            ],
           ),
-          child: Stack(
-            children: [
-              // Video or fallback
-              if (!_showSuccessInfo)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: _videoInitialized && !_videoError
-                      ? SizedBox.expand(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: _successVideoController.value.size.width,
-                        height: _successVideoController.value.size.height,
-                        child: VideoPlayer(_successVideoController),
-                      ),
-                    ),
-                  )
-                      : Container(
-                    width: double.infinity,
-                    height: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black,
-                          _themeColor.withOpacity(0.1),
-                          Colors.black,
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedBuilder(
-                            animation: _glowController,
-                            builder: (context, child) {
-                              return Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: _themeColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(100),
-                                  border: Border.all(
-                                    color: _themeColor.withOpacity(0.3 * _glowAnimation.value),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _themeColor.withOpacity(0.2 * _glowAnimation.value),
-                                      blurRadius: 15,
-                                      spreadRadius: 3,
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  FontAwesomeIcons.check,
-                                  color: _themeColor,
-                                  size: 50,
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            "SUCCESS",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                              letterSpacing: 3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
 
-              // Success info overlay
-              if (_showSuccessInfo)
-                FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: ScaleTransition(
-                    scale: _scaleAnimation,
+          // ── Video (full cover) ────────────────────────────────────────
+          if (_videoReady && !_isSkipped)
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width:  _videoCtrl.value.size.width,
+                  height: _videoCtrl.value.size.height,
+                  child: VideoPlayer(_videoCtrl),
+                ),
+              ),
+            ),
+
+          // ── Dark overlay for readability ──────────────────────────────
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(_videoReady && !_isSkipped ? 0.2 : 0.0),
+                    Colors.black.withOpacity(_videoReady && !_isSkipped ? 0.7 : 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── SKIP BUTTON (Top Right) ─────────────────────────────────────
+          Positioned(
+            top: 16,
+            right: 16,
+            child: FadeTransition(
+              opacity: _skipBtnOpacity,
+              child: SlideTransition(
+                position: _skipBtnSlide,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _skip,
+                    borderRadius: BorderRadius.circular(20),
                     child: Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
+                        color: _C.border.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(20),
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.black.withOpacity(0.9),
-                            Colors.black.withOpacity(0.95),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+                        border: Border.all(
+                          color: _C.blueMid.withOpacity(0.5),
+                          width: 0.8,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _C.blueMid.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          AnimatedBuilder(
-                            animation: _glowController,
-                            builder: (context, child) {
-                              return Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: _themeColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(100),
-                                  border: Border.all(
-                                    color: _themeColor.withOpacity(0.3 * _glowAnimation.value),
-                                    width: 2,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _themeColor.withOpacity(0.2 * _glowAnimation.value),
-                                      blurRadius: 15,
-                                      spreadRadius: 3,
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  FontAwesomeIcons.checkDouble,
-                                  color: _themeColor,
-                                  size: 36,
-                                ),
-                              );
-                            },
+                          Icon(
+                            Icons.skip_next_rounded,
+                            size: 16,
+                            color: _C.blueLight,
                           ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            "Attack Successful!",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Orbitron',
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
+                          const SizedBox(width: 6),
                           Text(
-                            "Bug successfully sent to ${widget.target}",
+                            'Skip',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                              fontFamily: 'ShareTechMono',
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 28),
-                          ElevatedButton(
-                            onPressed: widget.onDismiss,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _themeColor.withOpacity(0.1),
-                              foregroundColor: _themeColor,
-                              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                                side: BorderSide(
-                                  color: _themeColor.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                            child: const Text(
-                              "DONE",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Orbitron',
-                                letterSpacing: 1,
-                              ),
+                              color: _C.text,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ],
@@ -1416,10 +1204,375 @@ class _SuccessVideoDialogState extends State<SuccessVideoDialog> with TickerProv
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+
+          // ── Center logo & title ───────────────────────────────────────
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _uiFade,
+              child: SlideTransition(
+                position: _uiSlide,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildLogoRing(),
+                    const SizedBox(height: 36),
+                    _buildTitle(),
+                    const SizedBox(height: 10),
+                    _buildSubtitle(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bottom progress & tagline ─────────────────────────────────
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: FadeTransition(
+              opacity: _uiFade,
+              child: _buildBottomBar(),
+            ),
+          ),
+
+          // ── Fade-out overlay ──────────────────────────────────────────
+          if (_fadeOutStarted)
+            FadeTransition(
+              opacity: _fadeOut,
+              child: Container(color: _C.bg),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Logo Ring ────────────────────────────────────────────────────────────
+  Widget _buildLogoRing() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_ringCtrl, _glowCtrl]),
+      builder: (_, __) => SizedBox(
+        width: 160, height: 160,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Outer static ring
+            Container(
+              width: 158, height: 158,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _C.blueMid.withOpacity(_glowAnim.value * 0.15),
+                  width: 1,
+                ),
+              ),
+            ),
+            // Rotating dashed-style ring
+            Transform.rotate(
+              angle: _ringCtrl.value * math.pi * 2,
+              child: Container(
+                width: 138, height: 138,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: SweepGradient(
+                    colors: [
+                      _C.blueLight.withOpacity(_glowAnim.value * 0.7),
+                      Colors.transparent,
+                      _C.chrome.withOpacity(_glowAnim.value * 0.4),
+                      Colors.transparent,
+                      _C.blueLight.withOpacity(_glowAnim.value * 0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Counter-rotating inner ring
+            Transform.rotate(
+              angle: -_ringCtrl.value * math.pi * 2 * 0.6,
+              child: Container(
+                width: 118, height: 118,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _C.steel.withOpacity(_glowAnim.value * 0.5),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+            // Core glow
+            Container(
+              width: 96, height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _C.bg,
+                boxShadow: [
+                  BoxShadow(
+                    color: _C.blueMid.withOpacity(_glowAnim.value * 0.55),
+                    blurRadius: 40,
+                    spreadRadius: 0,
+                  ),
+                ],
+                border: Border.all(
+                  color: _C.blueLight.withOpacity(_glowAnim.value * 0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(Icons.water_rounded,
+                        color: _C.blueLight.withOpacity(_glowAnim.value),
+                        size: 44),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Title ────────────────────────────────────────────────────────────────
+  Widget _buildTitle() {
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (_, __) => ShaderMask(
+        shaderCallback: (b) => LinearGradient(
+          colors: [
+            _C.chrome,
+            _C.frost.withOpacity(0.9 + _glowAnim.value * 0.1),
+            _C.blueLight,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(b),
+        child: Text(
+          'Super Nova',
+          style: TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            letterSpacing: 1.5,
+            shadows: [
+              Shadow(
+                color: _C.blueMid.withOpacity(_glowAnim.value * 0.8),
+                blurRadius: 24,
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildSubtitle() {
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: _C.border.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _C.blueMid.withOpacity(_glowAnim.value * 0.25),
+          ),
+        ),
+        child: Text(
+          'Powered by @yatimloehk',
+          style: TextStyle(
+            color: _C.textSub.withOpacity(0.7 + _glowAnim.value * 0.3),
+            fontSize: 12,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Bottom Bar ───────────────────────────────────────────────────────────
+  Widget _buildBottomBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
+      child: Column(
+        children: [
+          // Loading dots
+          _LoadingDots(),
+          const SizedBox(height: 18),
+
+          // Progress bar
+          AnimatedBuilder(
+            animation: _progressCtrl,
+            builder: (_, __) => Column(children: [
+              // Bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: Stack(children: [
+                  Container(
+                    height: 3,
+                    width: double.infinity,
+                    color: _C.border.withOpacity(0.5),
+                  ),
+                  Container(
+                    height: 3,
+                    width: (MediaQuery.of(context).size.width - 64) *
+                        _progressCtrl.value,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_C.steel, _C.blueMid, _C.blueLight],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _C.blueMid.withOpacity(0.5),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '${(_progressCtrl.value * 100).toInt()}%  Memuat...',
+                style: const TextStyle(
+                  color: _C.textSub,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+// ─── Loading Dots ─────────────────────────────────────────────────────────────
+class _LoadingDots extends StatefulWidget {
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat();
+  }
+
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final s = math.sin(t * math.pi);
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Transform.scale(
+              scale: 0.4 + s * 0.6,
+              child: Container(
+                width: 7, height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _C.blueMid.withOpacity(0.35 + s * 0.65),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _C.blueMid.withOpacity(s * 0.4),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ─── Particle Painter ─────────────────────────────────────────────────────────
+class _ParticlePainter extends CustomPainter {
+  _ParticlePainter(this.t);
+
+  static final _rand = math.Random(42);
+  static final _particles = List.generate(28, (i) => _Particle(
+    x: _rand.nextDouble(),
+    y: _rand.nextDouble(),
+    size: 1.0 + _rand.nextDouble() * 2.0,
+    speed: 0.04 + _rand.nextDouble() * 0.1,
+    phase: _rand.nextDouble(),
+    opacity: 0.15 + _rand.nextDouble() * 0.35,
+  ));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Grid
+    final grid = Paint()
+      ..color = const Color(0xFF162B4A).withOpacity(0.3)
+      ..strokeWidth = 0.5;
+    const step = 44.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    // Central glow
+    final center = Offset(size.width / 2, size.height * 0.38);
+    final glow   = Paint()
+      ..shader = RadialGradient(colors: [
+        _C.steel.withOpacity(0.18 + math.sin(t * math.pi * 2) * 0.06),
+        Colors.transparent,
+      ], radius: 0.6).createShader(
+          Rect.fromCircle(center: center, radius: size.width * 0.7));
+    canvas.drawCircle(center, size.width * 0.7, glow);
+
+    // Floating particles
+    for (final p in _particles) {
+      final px = p.x * size.width;
+      final rawY = p.y + (t * p.speed) % 1.0;
+      final py = (rawY % 1.0) * size.height;
+      final drift = math.sin((t + p.phase) * math.pi * 2) * 8;
+      final osc = math.sin((t * 2 + p.phase) * math.pi);
+      final opacity = p.opacity * (0.5 + osc * 0.5);
+
+      canvas.drawCircle(
+        Offset(px + drift, py),
+        p.size,
+        Paint()..color = _C.blueLight.withOpacity(opacity),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ParticlePainter old) => old.t != t;
+}
+
+class _Particle {
+  final double x, y, size, speed, phase, opacity;
+  const _Particle({
+    required this.x, required this.y, required this.size,
+    required this.speed, required this.phase, required this.opacity,
+  });
+}
+
+const String baseUrl = "http://public.queen-official.com:2720";
