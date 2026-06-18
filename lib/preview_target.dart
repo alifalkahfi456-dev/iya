@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'api_config.dart';
-import 'splash.dart';
+import 'package:video_player/video_player.dart';
 
 // ─── Palette: Dark Premium dengan Warna Cerah (Tanpa Hitam) ──────────────────
 class _C {
