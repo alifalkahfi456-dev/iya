@@ -62,7 +62,7 @@ void main() {
     try {
       await tester.pumpWidget(
         RepaintBoundary(
-          child: MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(body: Dashboard())),
+          child: MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(body: DashboardPage())),
         ),
       );
 
