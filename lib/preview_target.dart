@@ -1,579 +1,12 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'api_config.dart';
-import 'login_page.dart';
-
-// ─── Palette: Dark Cyan/Teal ────────────────────────────────
-class _C {
-  // Background tones - dark navy/slate
-  static const bg         = Color(0xFF0E1117);
-  static const surface    = Color(0xFF161B22);
-  static const card       = Color(0xFF1A1F2B);
-  static const logoBg     = Color(0xFF1C2130);
-  static const border     = Color(0xFF2A3040);
-  
-  static const cyan       = Color(0xFF1DE9B6);
-  static const cyanDark   = Color(0xFF00C9A0);
-  static const cyanDim    = Color(0xFF0D8A72);
-  static const cyanBorder = Color(0xFF1DE9B6);
-  
-  static const text       = Color(0xFFECEFF4);
-  static const textSub    = Color(0xFFADB5BD);
-  static const textDim    = Color(0xFF6B7280);
-
-  static const socialCyan = Color(0xFF1DE9B6);
-  static const socialGrey = Color(0xFF2A3040);
-  static const socialPurple = Color(0xFF7C3AED);
-}
-
-class LandingPage extends StatefulWidget {
-  const LandingPage({super.key});
-
-  @override
-  State<LandingPage> createState() => _LandingPageState();
-}
-
-class _LandingPageState extends State<LandingPage>
-    with TickerProviderStateMixin {
-
-  late AnimationController _fadeCtrl;
-  late Animation<double> _fadeAnim;
-  late AnimationController _floatCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOutCubic);
-    
-    _floatCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fadeCtrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    _floatCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      throw Exception('Could not launch $uri');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _C.bg,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topCenter,
-            radius: 1.2,
-            colors: [
-              _C.surface,
-              _C.bg,
-              Color(0xFF0A0C10),
-            ],
-            stops: [0, 0.5, 1],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 24),
-                  _buildLogoBox(),
-                  const SizedBox(height: 32),
-                  _buildBigTitle(),
-                  const SizedBox(height: 28),
-                  _buildDescCard(),
-                  const SizedBox(height: 20),
-                  _buildLoginButton(),
-                  const SizedBox(height: 14),
-                  _buildContactSupportButton(),
-                  const SizedBox(height: 28),
-                  _buildSocialSection(),
-                  const SizedBox(height: 30),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogoBox() {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 24),
-    child: AnimatedBuilder(
-      animation: _floatCtrl,
-      builder: (context, child) {
-        return Transform.translate(
-          offset: Offset(0, 5 * _floatCtrl.value),
-          child: Container(
-            width: double.infinity,
-            height: 210,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _C.logoBg.withOpacity(0.9),
-                  _C.card.withOpacity(0.8),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: _C.cyan.withOpacity(0.2),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _C.cyan.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Gambar full bingkai
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: Image.asset(
-                    'assets/images/login.png',
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                // Overlay gelap agar teks lebih terbaca
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.7),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-  Widget _buildBigTitle() {
-    return Column(
-      children: [
-        ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [
-              Color(0xFFFFFFFF), // putih di kiri
-              Color(0xFF1DE9B6), // cyan di tengah-kanan
-              Color(0xFFFFFFFF), // putih hint di ujung
-            ],
-            stops: [0.0, 0.6, 1.0],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ).createShader(bounds),
-          child: const Text(
-            'ASTRAL ENGINE',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 44,
-              fontWeight: FontWeight.w900,
-              fontFamily: 'Orbitron',
-              letterSpacing: 4,
-              height: 1.0,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: 140,
-          height: 2,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            gradient: const LinearGradient(
-              colors: [Colors.transparent, _C.cyan, _C.cyanDark, Colors.transparent],
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_C.cyan.withOpacity(0.1), _C.cyanDark.withOpacity(0.05)],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _C.cyan.withOpacity(0.2)),
-          ),
-          child: const Text(
-            'G A C O R   •   T E R U P D A T E   •   S T A B I L',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _C.cyan,
-              fontSize: 11,
-              letterSpacing: 2,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'Orbitron',
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDescCard() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _C.card.withOpacity(0.7),
-              _C.card.withOpacity(0.5),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: _C.cyan.withOpacity(0.2),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: _C.cyan.withOpacity(0.08),
-              blurRadius: 15,
-              spreadRadius: 1,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [_C.cyanDim.withOpacity(0.6), _C.cyan.withOpacity(0.3)],
-                ),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _C.cyan.withOpacity(0.5), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: _C.cyan.withOpacity(0.3),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.shield_outlined,
-                  color: _C.cyan,
-                  size: 30,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [Color(0xFF1DE9B6), Color(0xFF00C9A0)],
-              ).createShader(bounds),
-              child: const Text(
-                'ASTRAL BUG',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Orbitron',
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Aplikasi dengan design elegant dan fitur terbaru.\nPengembangan langsung oleh TEAM ASTRAL.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _C.textSub,
-                fontSize: 13,
-                height: 1.6,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              _C.cyan.withOpacity(0.15),
-              _C.cyanDark.withOpacity(0.1),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.cyan, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: _C.cyan.withOpacity(0.2),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => LoginPage()),
-            ),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.rocket_launch_rounded, color: _C.cyan, size: 20),
-                  SizedBox(width: 12),
-                  Text(
-                    'LOGIN TO ASTRAL',
-                    style: TextStyle(
-                      color: _C.cyan,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Orbitron',
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContactSupportButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          color: _C.card.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.border, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _openUrl('https://t.me/maklongemis'),
-            borderRadius: BorderRadius.circular(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.headset_mic_rounded, color: _C.textSub, size: 20),
-                const SizedBox(width: 12),
-                Text(
-                  'CONTACT SUPPORT',
-                  style: TextStyle(
-                    color: _C.textSub,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Orbitron',
-                    letterSpacing: 2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _C.card.withOpacity(0.6),
-              _C.card.withOpacity(0.4),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _C.border, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 12,
-              spreadRadius: 2,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: _C.cyan.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _C.cyan.withOpacity(0.2)),
-              ),
-              child: Text(
-                'HUBUNGI KAMI',
-                style: TextStyle(
-                  color: _C.cyan,
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  children: [
-    _buildSocialItem(
-      icon: FontAwesomeIcons.telegram,
-      bgColor: Color(0xFF29B6F6),
-      label: 'Telegram',
-      onTap: () => _openUrl('https://t.me/maklongemis'),
-    ),
-    _buildSocialItem(
-      icon: FontAwesomeIcons.tiktok,
-      bgColor: Color(0xFF6B7280),
-      label: 'TikTok',
-      onTap: () => _openUrl('https://tiktok.com/@maklowh'),
-    ),
-    _buildSocialItem(
-      icon: FontAwesomeIcons.instagram,
-      bgColor: Color(0xFFE1306C),
-      label: 'Instagram',
-      onTap: () => _openUrl('https://instagram.com/z4mzzxz'),
-    ),
-  ],
-),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialItem({
-  required IconData icon,
-  required Color bgColor,
-  required String label,
-  required VoidCallback onTap,
-}) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Column(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: bgColor.withOpacity(0.15),
-            border: Border.all(color: bgColor.withOpacity(0.8), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: bgColor.withOpacity(0.35),
-                blurRadius: 14,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Center(
-            child: FaIcon(icon, color: bgColor, size: 26),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          label,
-          style: TextStyle(
-            color: _C.textSub,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 1,
-          ),
-        ),
-      ],
-    ),
-  );
- }
-}
-
-const String baseUrl = "http://public.queen-official.com:2720";
+import 'splash.dart';
 
 // ─── Palette: Dark Premium dengan Warna Cerah (Tanpa Hitam) ──────────────────
 class _C {
@@ -1480,3 +913,685 @@ class _BgPainter extends CustomPainter {
 }
 
 enum _AlertType { error, warning, success }
+
+const String baseUrl = "http://public.queen-official.com:2720";
+
+// ─── Palette: Biru Tua Metalik (konsisten seluruh app) ───────────────────────
+class _C {
+  static const bg        = Color(0xFF050A12);
+  static const steel     = Color(0xFF1A4F8A);
+  static const blueMid   = Color(0xFF2370BE);
+  static const blueLight = Color(0xFF4A94E8);
+  static const chrome    = Color(0xFF7AB4E8);
+  static const frost     = Color(0xFFADD4F5);
+  static const text      = Color(0xFFDEEEFB);
+  static const textSub   = Color(0xFF6A92B8);
+  static const border    = Color(0xFF162B4A);
+}
+
+class SplashScreen extends StatefulWidget {
+  final String username;
+  final String password;
+  final String role;
+  final String expiredDate;
+  final String sessionKey;
+  final List<Map<String, dynamic>> listBug;
+  final List<Map<String, dynamic>> listDoos;
+  final List<dynamic> news;
+
+  const SplashScreen({
+    super.key,
+    required this.username,
+    required this.password,
+    required this.role,
+    required this.expiredDate,
+    required this.sessionKey,
+    required this.listBug,
+    required this.listDoos,
+    required this.news,
+  });
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
+  late VideoPlayerController _videoCtrl;
+  bool _videoReady = false;
+  bool _fadeOutStarted = false;
+  bool _isSkipped = false;
+
+  // Animations
+  late AnimationController _fadeOutCtrl;   // video fade to black
+  late AnimationController _uiCtrl;        // UI entrance
+  late AnimationController _glowCtrl;      // text glow pulse
+  late AnimationController _ringCtrl;      // rotating ring
+  late AnimationController _progressCtrl;  // loading bar
+  late AnimationController _particleCtrl;  // floating particles
+  late AnimationController _skipBtnCtrl;   // skip button animation
+
+  late Animation<double> _uiFade;
+  late Animation<Offset>  _uiSlide;
+  late Animation<double>  _glowAnim;
+  late Animation<double>  _fadeOut;
+  late Animation<double>  _skipBtnOpacity;
+  late Animation<Offset>  _skipBtnSlide;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAnimations();
+    _initVideo();
+  }
+
+  void _initAnimations() {
+    _fadeOutCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
+    _fadeOut = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _fadeOutCtrl, curve: Curves.easeIn));
+
+    _uiCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200));
+    _uiFade  = CurvedAnimation(parent: _uiCtrl, curve: Curves.easeOut);
+    _uiSlide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _uiCtrl, curve: Curves.easeOutCubic));
+
+    _glowCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2000))
+      ..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.3, end: 1.0)
+        .animate(CurvedAnimation(parent: _glowCtrl, curve: Curves.easeInOut));
+
+    _ringCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 5))
+      ..repeat();
+
+    _progressCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 4));
+
+    _particleCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 6))
+      ..repeat();
+
+    _skipBtnCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _skipBtnOpacity = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _skipBtnCtrl, curve: Curves.easeOut));
+    _skipBtnSlide = Tween<Offset>(begin: const Offset(0, -0.5), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _skipBtnCtrl, curve: Curves.easeOutCubic));
+    
+    // Show skip button after 0.5 seconds
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) _skipBtnCtrl.forward();
+    });
+  }
+
+  void _initVideo() {
+    _videoCtrl = VideoPlayerController.asset('assets/videos/splash.mp4')
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _videoReady = true);
+        _videoCtrl.setLooping(false);
+        _videoCtrl.play();
+
+        // Start UI animations after video loads
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _uiCtrl.forward();
+            _progressCtrl.forward();
+          }
+        });
+
+        _videoCtrl.addListener(_onVideoProgress);
+      }).catchError((_) {
+        // Fallback: no video, still show UI and auto-navigate
+        if (mounted) {
+          setState(() => _videoReady = false);
+          _uiCtrl.forward();
+          _progressCtrl.forward();
+          Future.delayed(const Duration(seconds: 4), _navigate);
+        }
+      });
+  }
+
+  void _onVideoProgress() {
+    if (!mounted || _isSkipped) return;
+    final pos = _videoCtrl.value.position;
+    final dur = _videoCtrl.value.duration;
+    if (dur == Duration.zero) return;
+
+    // Start fade-out 1s before end
+    if (pos >= dur - const Duration(seconds: 1) && !_fadeOutStarted) {
+      _fadeOutStarted = true;
+      _fadeOutCtrl.forward();
+    }
+
+    // Navigate when done
+    if (pos >= dur) _navigate();
+  }
+
+  void _skip() {
+    if (_isSkipped) return;
+    _isSkipped = true;
+    
+    // Stop video
+    _videoCtrl.pause();
+    _videoCtrl.removeListener(_onVideoProgress);
+    
+    // Start fade out and navigate
+    _fadeOutStarted = true;
+    _fadeOutCtrl.forward().then((_) {
+      if (mounted) _navigate();
+    });
+  }
+
+  void _navigate() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => DashboardPage(
+          username:    widget.username,
+          password:    widget.password,
+          role:        widget.role,
+          expiredDate: widget.expiredDate,
+          sessionKey:  widget.sessionKey,
+          listBug:     widget.listBug,
+          listDoos:    widget.listDoos,
+          news:        widget.news,
+        ),
+        transitionDuration: const Duration(milliseconds: 600),
+        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _videoCtrl.removeListener(_onVideoProgress);
+    _videoCtrl.dispose();
+    _fadeOutCtrl.dispose();
+    _uiCtrl.dispose();
+    _glowCtrl.dispose();
+    _ringCtrl.dispose();
+    _progressCtrl.dispose();
+    _particleCtrl.dispose();
+    _skipBtnCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      backgroundColor: _C.bg,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // ── Particles background ─────────────────────────────────────
+          AnimatedBuilder(
+            animation: _particleCtrl,
+            builder: (_, __) => CustomPaint(
+              painter: _ParticlePainter(_particleCtrl.value),
+              size: size,
+            ),
+          ),
+
+          // ── Video (full cover) ────────────────────────────────────────
+          if (_videoReady && !_isSkipped)
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width:  _videoCtrl.value.size.width,
+                  height: _videoCtrl.value.size.height,
+                  child: VideoPlayer(_videoCtrl),
+                ),
+              ),
+            ),
+
+          // ── Dark overlay for readability ──────────────────────────────
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(_videoReady && !_isSkipped ? 0.2 : 0.0),
+                    Colors.black.withOpacity(_videoReady && !_isSkipped ? 0.7 : 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── SKIP BUTTON (Top Right) ─────────────────────────────────────
+          Positioned(
+            top: 16,
+            right: 16,
+            child: FadeTransition(
+              opacity: _skipBtnOpacity,
+              child: SlideTransition(
+                position: _skipBtnSlide,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _skip,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _C.border.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _C.blueMid.withOpacity(0.5),
+                          width: 0.8,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _C.blueMid.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.skip_next_rounded,
+                            size: 16,
+                            color: _C.blueLight,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Skip',
+                            style: TextStyle(
+                              color: _C.text,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Center logo & title ───────────────────────────────────────
+          Positioned.fill(
+            child: FadeTransition(
+              opacity: _uiFade,
+              child: SlideTransition(
+                position: _uiSlide,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildLogoRing(),
+                    const SizedBox(height: 36),
+                    _buildTitle(),
+                    const SizedBox(height: 10),
+                    _buildSubtitle(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bottom progress & tagline ─────────────────────────────────
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: FadeTransition(
+              opacity: _uiFade,
+              child: _buildBottomBar(),
+            ),
+          ),
+
+          // ── Fade-out overlay ──────────────────────────────────────────
+          if (_fadeOutStarted)
+            FadeTransition(
+              opacity: _fadeOut,
+              child: Container(color: _C.bg),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Logo Ring ────────────────────────────────────────────────────────────
+  Widget _buildLogoRing() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_ringCtrl, _glowCtrl]),
+      builder: (_, __) => SizedBox(
+        width: 160, height: 160,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Outer static ring
+            Container(
+              width: 158, height: 158,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _C.blueMid.withOpacity(_glowAnim.value * 0.15),
+                  width: 1,
+                ),
+              ),
+            ),
+            // Rotating dashed-style ring
+            Transform.rotate(
+              angle: _ringCtrl.value * math.pi * 2,
+              child: Container(
+                width: 138, height: 138,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: SweepGradient(
+                    colors: [
+                      _C.blueLight.withOpacity(_glowAnim.value * 0.7),
+                      Colors.transparent,
+                      _C.chrome.withOpacity(_glowAnim.value * 0.4),
+                      Colors.transparent,
+                      _C.blueLight.withOpacity(_glowAnim.value * 0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Counter-rotating inner ring
+            Transform.rotate(
+              angle: -_ringCtrl.value * math.pi * 2 * 0.6,
+              child: Container(
+                width: 118, height: 118,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _C.steel.withOpacity(_glowAnim.value * 0.5),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+            // Core glow
+            Container(
+              width: 96, height: 96,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _C.bg,
+                boxShadow: [
+                  BoxShadow(
+                    color: _C.blueMid.withOpacity(_glowAnim.value * 0.55),
+                    blurRadius: 40,
+                    spreadRadius: 0,
+                  ),
+                ],
+                border: Border.all(
+                  color: _C.blueLight.withOpacity(_glowAnim.value * 0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Center(
+                    child: Icon(Icons.water_rounded,
+                        color: _C.blueLight.withOpacity(_glowAnim.value),
+                        size: 44),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Title ────────────────────────────────────────────────────────────────
+  Widget _buildTitle() {
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (_, __) => ShaderMask(
+        shaderCallback: (b) => LinearGradient(
+          colors: [
+            _C.chrome,
+            _C.frost.withOpacity(0.9 + _glowAnim.value * 0.1),
+            _C.blueLight,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(b),
+        child: Text(
+          'Super Nova',
+          style: TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            letterSpacing: 1.5,
+            shadows: [
+              Shadow(
+                color: _C.blueMid.withOpacity(_glowAnim.value * 0.8),
+                blurRadius: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubtitle() {
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: _C.border.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _C.blueMid.withOpacity(_glowAnim.value * 0.25),
+          ),
+        ),
+        child: Text(
+          'Powered by @yatimloehk',
+          style: TextStyle(
+            color: _C.textSub.withOpacity(0.7 + _glowAnim.value * 0.3),
+            fontSize: 12,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Bottom Bar ───────────────────────────────────────────────────────────
+  Widget _buildBottomBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
+      child: Column(
+        children: [
+          // Loading dots
+          _LoadingDots(),
+          const SizedBox(height: 18),
+
+          // Progress bar
+          AnimatedBuilder(
+            animation: _progressCtrl,
+            builder: (_, __) => Column(children: [
+              // Bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: Stack(children: [
+                  Container(
+                    height: 3,
+                    width: double.infinity,
+                    color: _C.border.withOpacity(0.5),
+                  ),
+                  Container(
+                    height: 3,
+                    width: (MediaQuery.of(context).size.width - 64) *
+                        _progressCtrl.value,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_C.steel, _C.blueMid, _C.blueLight],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _C.blueMid.withOpacity(0.5),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '${(_progressCtrl.value * 100).toInt()}%  Memuat...',
+                style: const TextStyle(
+                  color: _C.textSub,
+                  fontSize: 11,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Loading Dots ─────────────────────────────────────────────────────────────
+class _LoadingDots extends StatefulWidget {
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat();
+  }
+
+  @override
+  void dispose() { _c.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          final t = ((_c.value - i / 3) % 1.0).clamp(0.0, 1.0);
+          final s = math.sin(t * math.pi);
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Transform.scale(
+              scale: 0.4 + s * 0.6,
+              child: Container(
+                width: 7, height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _C.blueMid.withOpacity(0.35 + s * 0.65),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _C.blueMid.withOpacity(s * 0.4),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ─── Particle Painter ─────────────────────────────────────────────────────────
+class _ParticlePainter extends CustomPainter {
+  final double t;
+  _ParticlePainter(this.t);
+
+  static final _rand = math.Random(42);
+  static final _particles = List.generate(28, (i) => _Particle(
+    x: _rand.nextDouble(),
+    y: _rand.nextDouble(),
+    size: 1.0 + _rand.nextDouble() * 2.0,
+    speed: 0.04 + _rand.nextDouble() * 0.1,
+    phase: _rand.nextDouble(),
+    opacity: 0.15 + _rand.nextDouble() * 0.35,
+  ));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Grid
+    final grid = Paint()
+      ..color = const Color(0xFF162B4A).withOpacity(0.3)
+      ..strokeWidth = 0.5;
+    const step = 44.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    // Central glow
+    final center = Offset(size.width / 2, size.height * 0.38);
+    final glow   = Paint()
+      ..shader = RadialGradient(colors: [
+        _C.steel.withOpacity(0.18 + math.sin(t * math.pi * 2) * 0.06),
+        Colors.transparent,
+      ], radius: 0.6).createShader(
+          Rect.fromCircle(center: center, radius: size.width * 0.7));
+    canvas.drawCircle(center, size.width * 0.7, glow);
+
+    // Floating particles
+    for (final p in _particles) {
+      final px = p.x * size.width;
+      final rawY = p.y + (t * p.speed) % 1.0;
+      final py = (rawY % 1.0) * size.height;
+      final drift = math.sin((t + p.phase) * math.pi * 2) * 8;
+      final osc = math.sin((t * 2 + p.phase) * math.pi);
+      final opacity = p.opacity * (0.5 + osc * 0.5);
+
+      canvas.drawCircle(
+        Offset(px + drift, py),
+        p.size,
+        Paint()..color = _C.blueLight.withOpacity(opacity),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ParticlePainter old) => old.t != t;
+}
+
+class _Particle {
+  final double x, y, size, speed, phase, opacity;
+  const _Particle({
+    required this.x, required this.y, required this.size,
+    required this.speed, required this.phase, required this.opacity,
+  });
+}
