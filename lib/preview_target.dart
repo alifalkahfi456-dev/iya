@@ -10,20 +10,20 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'nik_check.dart';
-import 'admin_page.dart';
-import 'owner_page.dart';
-import 'home_page.dart';
-import 'seller_page.dart';
-import 'change_password_page.dart';
-import 'tools_gateway.dart';
-import 'login_page.dart';
-import 'bug_sender.dart';
-import 'contact_page.dart';
-import 'profile_page.dart';
-import 'riwayat_page.dart';
-import 'info_page.dart';
-import 'device_dashboard.dart';
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
+// [stripped relative import]
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 class _C {
