@@ -62,7 +62,7 @@ void main() {
     try {
       await tester.pumpWidget(
         RepaintBoundary(
-          child: PreviewPlaceholder(),
+          child: MaterialApp(debugShowCheckedModeBanner: false, home: Scaffold(body: AiChatPage())),
         ),
       );
 
