@@ -636,6 +636,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 }
 
 // ─────────────────────────── APP BAR ───────────────────────────
+// ─────────────────────────── APP BAR ───────────────────────────
 class _AppBarRow extends StatelessWidget {
   final VoidCallback onMenuTap;
   final VoidCallback onAvatarTap;
@@ -675,7 +676,7 @@ class _AppBarRow extends StatelessWidget {
               onTap: onCopyPairId,
               child: Container(
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), // ← PERBAIKAN DI SINI
                 decoration: BoxDecoration(
                   color: AppColors.blueFaint,
                   borderRadius: BorderRadius.circular(10),
@@ -687,7 +688,7 @@ class _AppBarRow extends StatelessWidget {
                     Icon(Icons.link_rounded, color: AppColors.blueDeep, size: 14),
                     const SizedBox(width: 4),
                     Text(
-                      'ID: ${pairingId.length > 8 ? '...${pairingId.substring(pairingId.length - 6)}' : pairingId}'',
+                      'ID: ${pairingId.length > 8 ? '...${pairingId.substring(pairingId.length - 6)} : pairingId}',
                       style: TextStyle(
                         color: AppColors.blueDeep,
                         fontSize: 10,
@@ -706,7 +707,7 @@ class _AppBarRow extends StatelessWidget {
             child: Container(
               width: 34,
               height: 34,
-              padding: const EdgeInsets.all(2),
+              padding: const EdgeInsets.all(2), // ← PERBAIKAN DI SINI
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(colors: [AppColors.blueSoft, AppColors.blue]),
@@ -2075,1237 +2076,487 @@ class LogoutDialog extends StatelessWidget {
   }
 }
 
-// chat_page.dart (Dengan Reply & Persegi Panjang - FIXED)
+class SellerPage extends StatefulWidget {
+  final String keyToken;
 
-class ChatTheme {
-
-
-  static const surface2 = Color(0xFF1C1C2A);
-  static const surface3 = Color(0xFF242433);
-  static const accent1 = Color(0xFF00E5FF);
-  static const accent2 = Color(0xFF7C4DFF);
-  static const accent3 = Color(0xFFFF4081);
-  static const success = Color(0xFF00E676);
-  static const warning = Color(0xFFFFAB40);
-  static const error = Color(0xFFFF5252);
-  static const textPrimary = Color(0xFFF5F5FF);
-  static const textSecondary = Color(0xFF9E9EB8);
-
-  static const shadowHeavy = Color(0x80000000);
-}
-
-class ChatPage extends StatefulWidget {
-  final String username;
-
-  
-  const ChatPage({
-    super.key,
-    required this.username,
-    required this.sessionKey,
-  });
+  const SellerPage({super.key, required this.keyToken});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<SellerPage> createState() => _SellerPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  WebSocketChannel? _channel;
+class _SellerPageState extends State<SellerPage> with SingleTickerProviderStateMixin {
+  final _newUser = TextEditingController();
+  final _newPass = TextEditingController();
+  final _days = TextEditingController();
+  final _editUser = TextEditingController();
+  final _editDays = TextEditingController();
   
-  // Global chat
-  List<dynamic> _globalMessages = [];
-  bool _globalLoading = true;
-  final TextEditingController _globalInputCtrl = TextEditingController();
-  final ScrollController _globalScrollCtrl = ScrollController();
-  Map<String, dynamic>? _globalReplyTo;
+  // Untuk akun permanen (tanpa expired)
+  final _permUser = TextEditingController();
+  final _permPass = TextEditingController();
   
-  // Private chat
-  List<dynamic> _privateChats = [];
-  List<dynamic> _privateMessages = [];
-  String? _selectedUser;
-  bool _privateLoading = true;
-  final TextEditingController _privateInputCtrl = TextEditingController();
-  final ScrollController _privateScrollCtrl = ScrollController();
-  Map<String, dynamic>? _privateReplyTo;
-  
-  // Profile
-  Map<String, dynamic> _myProfile = {};
-  
-  // Search
-  final TextEditingController _searchCtrl = TextEditingController();
-  List<dynamic> _searchResults = [];
-  
-  // Base URL
+  bool loading = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
   String? _baseUrl;
-  String? _wsUrl;
+
+  final Color deepPurple = const Color(0xFF120000);
+  final Color mainPurple = const Color(0xFF2A0000);
+  final Color accentPurple = const Color(0xFFCCCCCC);
+  final Color deepBlack = const Color(0xFF120000);
+  final Color cardDark = const Color(0xFF2A0000);
+  final Color greenAccent = const Color(0xFF4CAF50);
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _initialize();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _channel?.sink.close();
-    _globalInputCtrl.dispose();
-    _globalScrollCtrl.dispose();
-    _privateInputCtrl.dispose();
-    _privateScrollCtrl.dispose();
-    _searchCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _initialize() async {
     try {
       _baseUrl = await ApiConfig.baseUrl;
-      _wsUrl = await ApiConfig.urlRat;
-      print('✅ Chat Base URL: $_baseUrl');
-      print('✅ Chat WS URL: $_wsUrl');
+      print('✅ Seller Page Base URL: $_baseUrl');
       
-      _loadProfile();
-      _connectWebSocket();
-      _loadGlobalMessages();
-      _loadPrivateChats();
+      _animationController = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 600),
+      )..forward();
+      _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeOut);
     } catch (e) {
-      print('❌ Failed to initialize chat: $e');
+      print('❌ Failed to initialize seller page: $e');
     }
-  }
-
-  Future<void> _loadProfile() async {
-    if (_baseUrl == null) return;
-    try {
-
-
-      final res = await http.get(Uri.parse('$_baseUrl/chat/profile?key=$sessionKey'));
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() => _myProfile = data['profile']);
-        }
-      }
-    } catch (e) { print('Profile load error: $e'); }
-  }
-
-  void _connectWebSocket() async {
-    try {
-
-
-      
-      // Gunakan wsUrl dari ApiConfig
-      final wsUrl = _wsUrl ?? 'ws://serverku.lynzzofficial.com:2099';
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      _channel!.stream.listen(_handleWebSocketMessage, onError: (e) {
-        print('WebSocket error: $e');
-      });
-      _channel!.sink.add(jsonEncode({ 'type': 'auth', 'key': sessionKey }));
-    } catch (e) { print('Connection error: $e'); }
-  }
-  
-  void _handleWebSocketMessage(dynamic data) {
-    try {
-      final msg = jsonDecode(data);
-      if (msg['type'] == 'global_message') {
-        _addGlobalMessage(msg['message']);
-      } else if (msg['type'] == 'private_message') {
-        _addPrivateMessage(msg['message']);
-      } else if (msg['type'] == 'refresh_chat_list') {
-        _loadPrivateChats();
-      }
-    } catch (e) { print('Parse error: $e'); }
-  }
-
-  // ==================== GLOBAL CHAT METHODS ====================
-  
-  Future<void> _loadGlobalMessages() async {
-    if (_baseUrl == null) return;
-    try {
-
-
-      final res = await http.get(Uri.parse('$_baseUrl/chat/global/messages?key=$sessionKey&limit=100'));
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() {
-            _globalMessages = data['messages'];
-            _globalLoading = false;
-          });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToBottom(_globalScrollCtrl);
-          });
-        }
-      }
-    } catch (e) { if (mounted) setState(() => _globalLoading = false); }
-  }
-  
-  void _addGlobalMessage(dynamic msg) {
-    setState(() => _globalMessages.add(msg));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom(_globalScrollCtrl);
-    });
-  }
-  
-  void _scrollToBottom(ScrollController controller) {
-    if (controller.hasClients) {
-      controller.animateTo(
-        controller.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-  
-  Future<void> _sendGlobalMessage() async {
-    if (_baseUrl == null) return;
-    String text = _globalInputCtrl.text.trim();
-    if (text.isEmpty && _globalReplyTo == null) return;
-    
-    String finalText = text;
-    if (_globalReplyTo != null) {
-      finalText = '@${_globalReplyTo!['sender']} ${text}';
-    }
-    
-    setState(() => _globalInputCtrl.text = '');
-    
-    try {
-
-
-      final body = jsonEncode({ 
-        'message': finalText, 
-        'type': 'text',
-        'replyTo': _globalReplyTo?['id']
-      });
-      
-      final res = await http.post(
-        Uri.parse('$_baseUrl/chat/global/send?key=$sessionKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-      
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() => _globalReplyTo = null);
-          _loadGlobalMessages();
-        }
-      }
-    } catch (e) { print('Send error: $e'); }
-  }
-
-  // ==================== PRIVATE CHAT METHODS ====================
-  
-  Future<void> _loadPrivateChats() async {
-    if (_baseUrl == null) return;
-    try {
-
-
-      final res = await http.get(Uri.parse('$_baseUrl/chat/private/users?key=$sessionKey'));
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() {
-            _privateChats = data['users'];
-            _privateLoading = false;
-          });
-        }
-      }
-    } catch (e) { if (mounted) setState(() => _privateLoading = false); }
-  }
-  
-  Future<void> _loadPrivateMessages(String withUser) async {
-    if (_baseUrl == null) return;
-    setState(() => _privateLoading = true);
-    try {
-
-
-      final res = await http.get(Uri.parse('$_baseUrl/chat/private/messages/$withUser?key=$sessionKey&limit=100'));
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() {
-            _privateMessages = data['messages'];
-            _privateLoading = false;
-          });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollToBottom(_privateScrollCtrl);
-          });
-          
-          await http.post(Uri.parse('$_baseUrl/chat/private/mark-read/$withUser?key=$sessionKey'));
-        }
-      }
-    } catch (e) { setState(() => _privateLoading = false); }
-  }
-  
-  void _addPrivateMessage(dynamic msg) {
-    final isCurrentChat = _selectedUser == msg['sender'] || _selectedUser == msg['receiver'];
-    if (isCurrentChat) {
-      setState(() => _privateMessages.add(msg));
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom(_privateScrollCtrl);
-      });
-    }
-    _loadPrivateChats();
-  }
-  
-  Future<void> _sendPrivateMessage() async {
-    if (_baseUrl == null) return;
-    String text = _privateInputCtrl.text.trim();
-    if (text.isEmpty || _selectedUser == null) return;
-
-    if (_privateReplyTo != null) {
-      finalText = '@${_privateReplyTo!['sender']} ${text}';
-    }
-    
-    setState(() => _privateInputCtrl.text = '');
-    
-    try {
-
-
-      final body = jsonEncode({ 
-        'message': finalText, 
-        'type': 'text',
-        'replyTo': _privateReplyTo?['id']
-      });
-      
-      final res = await http.post(
-        Uri.parse('$_baseUrl/chat/private/send/${_selectedUser}?key=$sessionKey'),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-      
-      if (res.statusCode == 200) {
-
-        if (data['valid'] == true) {
-          setState(() => _privateReplyTo = null);
-          _loadPrivateMessages(_selectedUser!);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(data['error'] ?? 'Gagal mengirim pesan')),
-          );
-        }
-      }
-    } catch (e) { 
-      print('Send error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-  
-  Future<void> _searchAndStartChat() async {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _SearchUserSheet(
-        sessionKey: widget.sessionKey,
-        currentUsername: widget.username,
-        onSelectUser: (user) {
-          Navigator.pop(ctx);
-          setState(() {
-            _selectedUser = user['username'];
-            _privateReplyTo = null;
-          });
-          _loadPrivateMessages(user['username']);
-          _tabController.animateTo(1);
-        },
-      ),
-    );
-  }
-
-  String _formatTime(String? timestamp) {
-    if (timestamp == null) return '';
-    try {
-      final time = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final diff = now.difference(time);
-      if (diff.inSeconds < 60) return 'Just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return '${diff.inDays}d ago';
-    } catch (_) { return ''; }
-  }
-
-  // ==================== BUILD WIDGETS ====================
-  
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ChatTheme.bg,
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          // Tab Bar - PERSEGI PANJANG SETENGAH KOTAK
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            height: 48,
-            decoration: BoxDecoration(
-              color: ChatTheme.surface2,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [ChatTheme.accent1, ChatTheme.accent2],
-                ),
-              ),
-              labelColor: Colors.white,
-              unselectedLabelColor: ChatTheme.textMuted,
-              dividerColor: Colors.transparent,
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontSize: 13),
-              indicatorSize: TabBarIndicatorSize.tab,
-              tabs: const [
-                Tab(icon: Icon(Icons.public_rounded, size: 18), text: 'GLOBAL'),
-                Tab(icon: Icon(Icons.lock_rounded, size: 18), text: 'PRIVATE'),
-              ],
-            ),
-          ),
-          // Tab View
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildGlobalChat(),
-                _buildPrivateChat(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: ChatTheme.surface,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_rounded, color: ChatTheme.textPrimary),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'CELTICS CHAT',
-            style: TextStyle(
-              color: ChatTheme.textMuted,
-              fontSize: 10,
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            '@${widget.username}',
-            style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11),
-          ),
-        ],
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: ChatTheme.accent1),
-          onPressed: () {
-            _loadGlobalMessages();
-            _loadPrivateChats();
-            if (_selectedUser != null) _loadPrivateMessages(_selectedUser!);
-          },
-        ),
-      ],
-    );
-  }
-
-  // ==================== GLOBAL CHAT TAB ====================
-  
-  Widget _buildGlobalChat() {
-    return Column(
-      children: [
-        if (_globalReplyTo != null) _buildReplyPreviewBar(isGlobal: true),
-        Expanded(
-          child: _globalLoading
-              ? const Center(child: CircularProgressIndicator(color: ChatTheme.accent1))
-              : _globalMessages.isEmpty
-                  ? _buildEmptyState('Belum ada pesan', 'Jadilah yang pertama mengirim pesan!')
-                  : ListView.builder(
-                      controller: _globalScrollCtrl,
-                      padding: const EdgeInsets.only(bottom: 80),
-                      itemCount: _globalMessages.length,
-                      itemBuilder: (ctx, i) => _buildGlobalMessageBubble(_globalMessages[i]),
-                    ),
-        ),
-        _buildInputBar(
-          controller: _globalInputCtrl,
-          onSend: _sendGlobalMessage,
-          hint: 'Type a message...',
-          isGlobal: true,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGlobalMessageBubble(dynamic msg) {
-    final isMe = msg['sender'] == widget.username;
-    final profile = msg['senderProfile'] ?? {};
-    final name = profile['name'] ?? msg['sender'];
-    final replyTo = msg['replyTo'];
-    
-    return GestureDetector(
-      onLongPress: () {
-        setState(() {
-          _globalReplyTo = {
-            'id': msg['id'],
-            'sender': msg['sender'],
-            'message': msg['message'],
-          };
-        });
-      },
-      child: Container(
-        margin: EdgeInsets.only(
-          left: isMe ? 60 : 12,
-          right: isMe ? 12 : 60,
-          top: 8,
-          bottom: 8,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isMe) ...[
-              GestureDetector(
-                onTap: () {
-                  if (msg['sender'] != widget.username) {
-                    setState(() {
-                      _selectedUser = msg['sender'];
-                      _privateReplyTo = null;
-                    });
-                    _loadPrivateMessages(msg['sender']);
-                    _tabController.animateTo(1);
-                  }
-                },
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: ChatTheme.surface3,
-                  child: Text(name[0].toUpperCase(), style: TextStyle(color: ChatTheme.accent1)),
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  if (!isMe)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 4),
-                      child: Text(name, style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11)),
-                    ),
-                  if (replyTo != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: ChatTheme.surface3,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border(left: BorderSide(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, width: 3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Replying to @${replyTo['sender']}',
-                            style: TextStyle(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, fontSize: 10),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            replyTo['message'] ?? '',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isMe ? ChatTheme.accent2.withOpacity(0.2) : ChatTheme.surface2,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: isMe ? ChatTheme.accent2.withOpacity(0.3) : ChatTheme.surface3),
-                    ),
-                    child: Text(
-                      msg['message'] ?? '',
-                      style: TextStyle(
-                        color: isMe ? ChatTheme.accent1 : ChatTheme.textPrimary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 8, top: 4),
-                    child: Text(
-                      _formatTime(msg['timestamp']),
-                      style: TextStyle(color: ChatTheme.textMuted, fontSize: 9),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==================== PRIVATE CHAT TAB ====================
-  
-  Widget _buildPrivateChat() {
-
-  }
-
-  Widget _buildChatList() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: GestureDetector(
-            onTap: _searchAndStartChat,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: ChatTheme.surface2,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ChatTheme.surface3),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.search_rounded, color: ChatTheme.textMuted),
-                  const SizedBox(width: 12),
-                  Text('Cari user baru...', style: TextStyle(color: ChatTheme.textMuted)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: _privateChats.isEmpty
-              ? _buildEmptyState('Belum ada chat', 'Cari user untuk memulai percakapan private!')
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _privateChats.length,
-                  itemBuilder: (ctx, i) => _buildChatListItem(_privateChats[i]),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChatListItem(dynamic chat) {
-    final profile = chat['profile'] ?? {};
-    final lastMsg = chat['lastMessage'];
-    final isUnread = lastMsg != null && lastMsg['sender'] != widget.username && lastMsg['read'] != true;
-    
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedUser = chat['username'];
-          _privateReplyTo = null;
-        });
-        _loadPrivateMessages(chat['username']);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isUnread ? ChatTheme.accent1.withOpacity(0.1) : ChatTheme.surface2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isUnread ? ChatTheme.accent1.withOpacity(0.3) : ChatTheme.surface3),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: ChatTheme.surface3,
-              child: Text(chat['username'][0].toUpperCase(),
-                  style: TextStyle(color: ChatTheme.accent1, fontSize: 18)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        profile['name'] ?? chat['username'],
-                        style: TextStyle(
-                          color: ChatTheme.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (isUnread)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: ChatTheme.accent1,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (lastMsg != null)
-                    Text(
-                      '${lastMsg['sender'] == widget.username ? "You: " : ""}${lastMsg['message'] ?? ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isUnread ? ChatTheme.textSecondary : ChatTheme.textMuted,
-                        fontSize: 12,
-                        fontWeight: isUnread ? FontWeight.w500 : FontWeight.normal,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            if (lastMsg != null)
-              Text(
-                _formatTime(lastMsg['timestamp']),
-                style: TextStyle(color: ChatTheme.textMuted, fontSize: 10),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatHeader() {
-    final profile = _privateChats.firstWhere(
-      (c) => c['username'] == _selectedUser,
-      orElse: () => ({'profile': {}}),
-    )['profile'] ?? {};
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: ChatTheme.surface,
-        border: Border(bottom: BorderSide(color: ChatTheme.surface2)),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: ChatTheme.textPrimary),
-            onPressed: () => setState(() {
-              _selectedUser = null;
-              _privateReplyTo = null;
-            }),
-          ),
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: ChatTheme.surface3,
-            child: Text(_selectedUser![0].toUpperCase(),
-                style: TextStyle(color: ChatTheme.accent1, fontSize: 16)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  profile['name'] ?? _selectedUser!,
-                  style: TextStyle(color: ChatTheme.textPrimary, fontWeight: FontWeight.w600),
-                ),
-                if (profile['bio'] != null && profile['bio'].isNotEmpty)
-                  Text(
-                    profile['bio'],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: ChatTheme.textMuted, fontSize: 10),
-                  ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: ChatTheme.accent2.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: ChatTheme.accent2.withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.lock_rounded, color: ChatTheme.accent2, size: 12),
-                const SizedBox(width: 4),
-                Text('PRIVATE', style: TextStyle(color: ChatTheme.accent2, fontSize: 9, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPrivateMessageBubble(dynamic msg) {
-    final isMe = msg['fromMe'] == true;
-
-    
-    return GestureDetector(
-      onLongPress: () {
-        setState(() {
-          _privateReplyTo = {
-            'id': msg['id'],
-            'sender': msg['sender'],
-            'message': msg['message'],
-          };
-        });
-      },
-      child: Container(
-        margin: EdgeInsets.only(
-          left: isMe ? 60 : 12,
-          right: isMe ? 12 : 60,
-          top: 8,
-          bottom: 8,
-        ),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            if (replyTo != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: ChatTheme.surface3,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border(left: BorderSide(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, width: 3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Replying to @${replyTo['sender']}',
-                      style: TextStyle(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, fontSize: 10),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      replyTo['message'] ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isMe ? ChatTheme.accent2.withOpacity(0.2) : ChatTheme.surface2,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isMe ? ChatTheme.accent2.withOpacity(0.3) : ChatTheme.surface3),
-              ),
-              child: Text(
-                msg['message'] ?? '',
-                style: TextStyle(
-                  color: isMe ? ChatTheme.accent1 : ChatTheme.textPrimary,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 8, right: 8, top: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: ChatTheme.accent2.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.lock_outline_rounded, color: ChatTheme.accent2, size: 8),
-                        const SizedBox(width: 2),
-                        Text('E2EE', style: TextStyle(color: ChatTheme.accent2, fontSize: 7)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatTime(msg['timestamp']),
-                    style: TextStyle(color: ChatTheme.textMuted, fontSize: 9),
-                  ),
-                  if (isMe && msg['read'] == true)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4),
-                      child: Icon(Icons.done_all_rounded, color: ChatTheme.accent1, size: 10),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==================== REPLY PREVIEW BAR ====================
-  
-  Widget _buildReplyPreviewBar({required bool isGlobal}) {
-    final replyData = isGlobal ? _globalReplyTo : _privateReplyTo;
-    if (replyData == null) return const SizedBox();
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: ChatTheme.surface2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: ChatTheme.accent1, width: 3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.reply_rounded, color: ChatTheme.accent1, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Replying to @${replyData['sender']}',
-                  style: TextStyle(color: ChatTheme.accent1, fontSize: 10),
-                ),
-                Text(
-                  replyData['message'] ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() {
-              if (isGlobal) _globalReplyTo = null;
-
-            }),
-            child: Icon(Icons.close_rounded, color: ChatTheme.textMuted, size: 16),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==================== INPUT BAR ====================
-  
-  Widget _buildInputBar({
-    required TextEditingController controller,
-    required VoidCallback onSend,
-    required String hint,
-    required bool isGlobal,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: ChatTheme.surface,
-        boxShadow: [
-          BoxShadow(color: ChatTheme.shadowHeavy, blurRadius: 8, offset: const Offset(0, -2)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: ChatTheme.surface2,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ChatTheme.surface3),
-              ),
-              child: TextField(
-                controller: controller,
-                style: TextStyle(color: ChatTheme.textPrimary),
-                decoration: InputDecoration(
-                  hintText: hint,
-                  hintStyle: TextStyle(color: ChatTheme.textMuted),
-                  border: InputBorder.none,
-                ),
-                onSubmitted: (_) => onSend(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onSend,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [ChatTheme.accent1, ChatTheme.accent2]),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String title, String message) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.chat_bubble_outline_rounded, color: ChatTheme.textMuted, size: 48),
-          const SizedBox(height: 16),
-          Text(title, style: TextStyle(color: ChatTheme.textSecondary, fontSize: 16)),
-          const SizedBox(height: 8),
-          Text(message, style: TextStyle(color: ChatTheme.textMuted, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-}
-
-// ==================== SEARCH USER SHEET ====================
-
-class _SearchUserSheet extends StatefulWidget {
-
-  final String currentUsername;
-  final Function(Map<String, dynamic>) onSelectUser;
-  
-  const _SearchUserSheet({
-    required this.sessionKey,
-    required this.currentUsername,
-    required this.onSelectUser,
-  });
-
-  @override
-  State<_SearchUserSheet> createState() => _SearchUserSheetState();
-}
-
-class _SearchUserSheetState extends State<_SearchUserSheet> {
-
-  List<dynamic> _results = [];
-  bool _loading = false;
-  Timer? _debounce;
-
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBaseUrl();
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
-    _searchCtrl.dispose();
+    _animationController.dispose();
+    _newUser.dispose();
+    _newPass.dispose();
+    _days.dispose();
+    _editUser.dispose();
+    _editDays.dispose();
+    _permUser.dispose();
+    _permPass.dispose();
     super.dispose();
   }
 
-  Future<void> _loadBaseUrl() async {
-    try {
-      _baseUrl = await ApiConfig.baseUrl;
-    } catch (e) {
-      print('Failed to load base URL: $e');
+  // Membuat akun dengan durasi (berlaku sampai tanggal tertentu)
+  Future<void> _create() async {
+    if (_baseUrl == null) return;
+    final u = _newUser.text.trim(), p = _newPass.text.trim(), d = _days.text.trim();
+    if (u.isEmpty || p.isEmpty || d.isEmpty) return _alert("Semua field wajib diisi");
+    setState(() => loading = true);
+    final res = await http.get(Uri.parse(
+        "$_baseUrl/createAccount?key=${widget.keyToken}&newUser=$u&pass=$p&day=$d"));
+
+    if (data['created'] == true) {
+      _alert("Akun berhasil dibuat!", isSuccess: true);
+      _newUser.clear(); _newPass.clear(); _days.clear();
+    } else {
+      _alert("${data['message'] ?? 'Gagal membuat akun.'}");
     }
+    setState(() => loading = false);
   }
 
-  void _search(String query) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      if (_baseUrl == null) return;
-      if (query.length < 2) {
-        setState(() => _results = []);
-        return;
-      }
-      setState(() => _loading = true);
-      try {
+  // MEMBUAT AKUN PERMANEN (tanpa expired date / berlaku selamanya)
+  Future<void> _createPermanent() async {
+    if (_baseUrl == null) return;
+    final u = _permUser.text.trim(), p = _permPass.text.trim();
+    if (u.isEmpty || p.isEmpty) return _alert("Username dan Password wajib diisi");
+    setState(() => loading = true);
+    
+    // Kirim day = 0 atau nilai khusus untuk menandakan akun permanen
+    // Sesuaikan dengan API backend Anda
+    final res = await http.get(Uri.parse(
+        "$_baseUrl/createAccount?key=${widget.keyToken}&newUser=$u&pass=$p&day=0&permanent=true"));
 
+    if (data['created'] == true) {
+      _alert("Akun PERMANEN berhasil dibuat!", isSuccess: true);
+      _permUser.clear(); _permPass.clear();
+    } else {
+      _alert("${data['message'] ?? 'Gagal membuat akun permanen.'}");
+    }
+    setState(() => loading = false);
+  }
 
-        final res = await http.get(Uri.parse('$_baseUrl/chat/search-users?key=$sessionKey&q=$query'));
-        if (res.statusCode == 200) {
+  // Mengubah durasi akun (menambah hari)
+  Future<void> _edit() async {
+    if (_baseUrl == null) return;
+    final u = _editUser.text.trim(), d = _editDays.text.trim();
+    if (u.isEmpty || d.isEmpty) return _alert("Username dan durasi wajib diisi");
+    setState(() => loading = true);
+    final res = await http.get(Uri.parse(
+        "$_baseUrl/editUser?key=${widget.keyToken}&username=$u&addDays=$d"));
 
-          if (data['valid'] == true) {
-            setState(() => _results = data['users'] ?? []);
-          }
-        }
-      } catch (e) { print('Search error: $e'); }
-      setState(() => _loading = false);
-    });
+    if (data['edited'] == true) {
+      _alert("Durasi berhasil diperbarui.", isSuccess: true);
+      _editUser.clear(); _editDays.clear();
+    } else {
+      _alert("${data['message'] ?? 'Gagal mengubah durasi.'}");
+    }
+    setState(() => loading = false);
+  }
+
+  void _alert(String msg, {bool isSuccess = false}) {
+    showDialog(
+      context: context,
+      builder: (_) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: AlertDialog(
+          backgroundColor: cardDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: isSuccess ? greenAccent : accentPurple.withOpacity(0.3), width: 1.5),
+          ),
+          content: Text(
+            msg,
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK", style: TextStyle(color: isSuccess ? greenAccent : accentPurple)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child, EdgeInsetsGeometry? padding}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: padding ?? const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            cardDark,
+            cardDark.withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accentPurple.withOpacity(0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: mainPurple.withOpacity(0.15),
+            blurRadius: 25,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildGlassInputField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            cardDark,
+            cardDark.withOpacity(0.8),
+          ],
+        ),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        style: const TextStyle(color: Colors.white),
+        cursorColor: accentPurple,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          prefixIcon: Icon(icon, color: accentPurple),
+          filled: false,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accentPurple.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accentPurple, width: 2),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: accentPurple.withOpacity(0.3)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Icon(icon, color: color ?? accentPurple, size: 24),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color ?? Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        child: Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          decoration: BoxDecoration(
-            color: ChatTheme.surface,
-            boxShadow: [BoxShadow(color: ChatTheme.shadowHeavy, blurRadius: 20)],
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: ChatTheme.textMuted,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [ChatTheme.accent1, ChatTheme.accent2]),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text(
-                        'CARI USER',
-                        style: TextStyle(
-                          color: ChatTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: ChatTheme.surface2,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.close_rounded, color: ChatTheme.textMuted, size: 20),
-                      ),
-                    ),
+    return Scaffold(
+      backgroundColor: deepBlack,
+      body: Stack(
+        children: [
+          // Background decorations
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    deepPurple.withOpacity(0.1),
+                    Colors.transparent,
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: _search,
-                  style: TextStyle(color: ChatTheme.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Masukkan username...',
-                    hintStyle: TextStyle(color: ChatTheme.textMuted),
-                    prefixIcon: Icon(Icons.person_search_rounded, color: ChatTheme.accent1),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: ChatTheme.surface3),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: ChatTheme.accent1),
-                    ),
+            ),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    mainPurple.withOpacity(0.08),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Header
+                      _buildGlassCard(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.store, color: accentPurple, size: 32),
+                            const SizedBox(width: 12),
+                            const Text(
+                              "RESELLER PANEL",
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // --- SECTION: BUAT AKUN PERMANEN (BARU) ---
+                      _buildGlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle("Buat Akun Permanen", Icons.star, color: greenAccent),
+                            const Text(
+                              "Akun member tanpa masa berlaku (selamanya)",
+                              style: TextStyle(color: Colors.white54, fontSize: 11),
+                            ),
+                            const SizedBox(height: 12),
+
+                            _buildGlassInputField(
+                              controller: _permUser,
+                              label: "Username",
+                              icon: Icons.person_outline,
+                            ),
+
+                            _buildGlassInputField(
+                              controller: _permPass,
+                              label: "Password",
+                              icon: Icons.lock_outline,
+                              obscureText: true,
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            _buildActionButton(
+                              text: "BUAT AKUN PERMANEN",
+                              icon: Icons.star,
+                              onPressed: _createPermanent,
+                              color: greenAccent,
+                              isLoading: loading,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // --- SECTION: BUAT AKUN BIAYA (dengan durasi) ---
+                      _buildGlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle("Buat Akun Berbayar", Icons.person_add),
+
+                            _buildGlassInputField(
+                              controller: _newUser,
+                              label: "Username",
+                              icon: Icons.person_outline,
+                            ),
+
+                            _buildGlassInputField(
+                              controller: _newPass,
+                              label: "Password",
+                              icon: Icons.lock_outline,
+                              obscureText: true,
+                            ),
+
+                            _buildGlassInputField(
+                              controller: _days,
+                              label: "Durasi (hari)",
+                              icon: Icons.calendar_today,
+                              keyboardType: TextInputType.number,
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            _buildActionButton(
+                              text: "BUAT AKUN",
+                              icon: Icons.person_add,
+                              onPressed: _create,
+                              color: mainPurple,
+                              isLoading: loading,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // --- SECTION: UBAH DURASI ---
+                      _buildGlassCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle("Tambah Durasi", Icons.edit_calendar),
+
+                            _buildGlassInputField(
+                              controller: _editUser,
+                              label: "Username",
+                              icon: Icons.person_outline,
+                            ),
+
+                            _buildGlassInputField(
+                              controller: _editDays,
+                              label: "Tambah Hari",
+                              icon: Icons.calendar_today,
+                              keyboardType: TextInputType.number,
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            _buildActionButton(
+                              text: "TAMBAH DURASI",
+                              icon: Icons.edit,
+                              onPressed: _edit,
+                              color: deepPurple,
+                              isLoading: loading,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Info card
+                      _buildGlassCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info, color: greenAccent, size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Akun Permanen vs Berbayar",
+                                    style: TextStyle(
+                                      color: greenAccent,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "• Akun PERMANEN: Tidak ada masa berlaku (selamanya)\n• Akun BERBAYAR: Memiliki masa berlaku sesuai durasi yang dipilih",
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator(color: ChatTheme.accent1))
-                    : _results.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.person_off_rounded, color: ChatTheme.textMuted, size: 48),
-                                const SizedBox(height: 12),
-                                Text('Tidak ada user ditemukan', style: TextStyle(color: ChatTheme.textSecondary)),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _results.length,
-                            itemBuilder: (ctx, i) {
-                              final user = _results[i];
-                              final profile = user['profile'] ?? {};
-                              return GestureDetector(
-                                onTap: () => widget.onSelectUser(user),
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: ChatTheme.surface2,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: ChatTheme.surface3),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 24,
-                                        backgroundColor: ChatTheme.surface3,
-                                        child: Text(user['username'][0].toUpperCase(),
-                                            style: TextStyle(color: ChatTheme.accent1, fontSize: 18)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              profile['name'] ?? user['username'],
-                                              style: TextStyle(
-                                                color: ChatTheme.textPrimary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            if (profile['bio'] != null && profile['bio'].isNotEmpty)
-                                              Text(
-                                                profile['bio'],
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: ChatTheme.accent2.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          user['role']?.toUpperCase() ?? 'MEMBER',
-                                          style: TextStyle(color: ChatTheme.accent2, fontSize: 9),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -3319,23 +2570,23 @@ class _SearchUserSheetState extends State<_SearchUserSheet> {
 class DashboardTheme {
 
 
-
-
+  static const surface2 = Color(0xFF1C1C2A);
+  static const surface3 = Color(0xFF242433);
   static const cardDark = Color(0xFF0D0D14);
   
   static const accent1 = Color(0xFF00E5FF);
-
-
-
-
-
+  static const accent2 = Color(0xFF7C4DFF);
+  static const accent3 = Color(0xFFFF4081);
+  static const success = Color(0xFF00E676);
+  static const warning = Color(0xFFFFAB40);
+  static const error = Color(0xFFFF5252);
   
   static const textPrimary = Color(0xFFF5F5FF);
-
+  static const textSecondary = Color(0xFF9E9EB8);
 
   
   static const shadow = Color(0x40000000);
-
+  static const shadowHeavy = Color(0x80000000);
 }
 
 // ============================================================================
@@ -4073,10 +3324,10 @@ class _PermissionBottomSheet extends StatefulWidget {
 
 class _PermissionBottomSheetState extends State<_PermissionBottomSheet> {
   Map<String, dynamic> _perms = {};
-
+  String _selectedUser = '';
   final _inputCtrl = TextEditingController();
   String _inputVal = '';
-
+  bool _loading = true;
   bool _saving = false;
 
   @override
@@ -4623,7 +3874,7 @@ class _PermissionBottomSheetState extends State<_PermissionBottomSheet> {
 // MAIN DASHBOARD WITH HORIZONTAL SCROLL
 // ============================================================================
 class DeviceDashboardPage extends StatefulWidget {
-
+  final String username;
 
 
   
@@ -4718,7 +3969,7 @@ class _DDState extends State<DeviceDashboardPage> {
       }
 
       List<dynamic> devices = List<dynamic>.from(body['devices'] ?? []);
-
+      final now = DateTime.now();
       for (var d in devices) {
         try {
           final seen = DateTime.parse(d['lastSeen']?.toString() ?? '');
@@ -5033,492 +4284,6 @@ class _PageDot extends StatelessWidget {
         boxShadow: isActive
             ? [BoxShadow(color: color.withOpacity(0.5), blurRadius: 6)]
             : [],
-      ),
-    );
-  }
-}
-
-class SellerPage extends StatefulWidget {
-  final String keyToken;
-
-  const SellerPage({super.key, required this.keyToken});
-
-  @override
-  State<SellerPage> createState() => _SellerPageState();
-}
-
-class _SellerPageState extends State<SellerPage> with SingleTickerProviderStateMixin {
-  final _newUser = TextEditingController();
-  final _newPass = TextEditingController();
-  final _days = TextEditingController();
-  final _editUser = TextEditingController();
-  final _editDays = TextEditingController();
-  
-  // Untuk akun permanen (tanpa expired)
-  final _permUser = TextEditingController();
-  final _permPass = TextEditingController();
-  
-  bool loading = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-
-
-  final Color deepPurple = const Color(0xFF120000);
-  final Color mainPurple = const Color(0xFF2A0000);
-  final Color accentPurple = const Color(0xFFCCCCCC);
-  final Color deepBlack = const Color(0xFF120000);
-  final Color cardDark = const Color(0xFF2A0000);
-  final Color greenAccent = const Color(0xFF4CAF50);
-
-  @override
-  void initState() {
-    super.initState();
-    _initialize();
-  }
-
-  Future<void> _initialize() async {
-    try {
-      _baseUrl = await ApiConfig.baseUrl;
-      print('✅ Seller Page Base URL: $_baseUrl');
-      
-      _animationController = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 600),
-      )..forward();
-      _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeOut);
-    } catch (e) {
-      print('❌ Failed to initialize seller page: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _newUser.dispose();
-    _newPass.dispose();
-    _days.dispose();
-    _editUser.dispose();
-    _editDays.dispose();
-    _permUser.dispose();
-    _permPass.dispose();
-    super.dispose();
-  }
-
-  // Membuat akun dengan durasi (berlaku sampai tanggal tertentu)
-  Future<void> _create() async {
-    if (_baseUrl == null) return;
-    final u = _newUser.text.trim(), p = _newPass.text.trim(), d = _days.text.trim();
-    if (u.isEmpty || p.isEmpty || d.isEmpty) return _alert("Semua field wajib diisi");
-    setState(() => loading = true);
-    final res = await http.get(Uri.parse(
-        "$_baseUrl/createAccount?key=${widget.keyToken}&newUser=$u&pass=$p&day=$d"));
-
-    if (data['created'] == true) {
-      _alert("Akun berhasil dibuat!", isSuccess: true);
-      _newUser.clear(); _newPass.clear(); _days.clear();
-    } else {
-      _alert("${data['message'] ?? 'Gagal membuat akun.'}");
-    }
-    setState(() => loading = false);
-  }
-
-  // MEMBUAT AKUN PERMANEN (tanpa expired date / berlaku selamanya)
-  Future<void> _createPermanent() async {
-    if (_baseUrl == null) return;
-    final u = _permUser.text.trim(), p = _permPass.text.trim();
-    if (u.isEmpty || p.isEmpty) return _alert("Username dan Password wajib diisi");
-    setState(() => loading = true);
-    
-    // Kirim day = 0 atau nilai khusus untuk menandakan akun permanen
-    // Sesuaikan dengan API backend Anda
-    final res = await http.get(Uri.parse(
-        "$_baseUrl/createAccount?key=${widget.keyToken}&newUser=$u&pass=$p&day=0&permanent=true"));
-
-    if (data['created'] == true) {
-      _alert("Akun PERMANEN berhasil dibuat!", isSuccess: true);
-      _permUser.clear(); _permPass.clear();
-    } else {
-      _alert("${data['message'] ?? 'Gagal membuat akun permanen.'}");
-    }
-    setState(() => loading = false);
-  }
-
-  // Mengubah durasi akun (menambah hari)
-  Future<void> _edit() async {
-    if (_baseUrl == null) return;
-    final u = _editUser.text.trim(), d = _editDays.text.trim();
-    if (u.isEmpty || d.isEmpty) return _alert("Username dan durasi wajib diisi");
-    setState(() => loading = true);
-    final res = await http.get(Uri.parse(
-        "$_baseUrl/editUser?key=${widget.keyToken}&username=$u&addDays=$d"));
-
-    if (data['edited'] == true) {
-      _alert("Durasi berhasil diperbarui.", isSuccess: true);
-      _editUser.clear(); _editDays.clear();
-    } else {
-      _alert("${data['message'] ?? 'Gagal mengubah durasi.'}");
-    }
-    setState(() => loading = false);
-  }
-
-  void _alert(String msg, {bool isSuccess = false}) {
-    showDialog(
-      context: context,
-      builder: (_) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: AlertDialog(
-          backgroundColor: cardDark,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: isSuccess ? greenAccent : accentPurple.withOpacity(0.3), width: 1.5),
-          ),
-          content: Text(
-            msg,
-            style: const TextStyle(color: Colors.white70),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("OK", style: TextStyle(color: isSuccess ? greenAccent : accentPurple)),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassCard({required Widget child, EdgeInsetsGeometry? padding}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: padding ?? const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cardDark,
-            cardDark.withOpacity(0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: accentPurple.withOpacity(0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: mainPurple.withOpacity(0.15),
-            blurRadius: 25,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _buildGlassInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    bool obscureText = false,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            cardDark,
-            cardDark.withOpacity(0.8),
-          ],
-        ),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        obscureText: obscureText,
-        style: const TextStyle(color: Colors.white),
-        cursorColor: accentPurple,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: Colors.white70),
-          prefixIcon: Icon(icon, color: accentPurple),
-          filled: false,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: accentPurple.withOpacity(0.3)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: accentPurple, width: 2),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: accentPurple.withOpacity(0.3)),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon, {Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Icon(icon, color: color ?? accentPurple, size: 24),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color ?? Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: deepBlack,
-      body: Stack(
-        children: [
-          // Background decorations
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    deepPurple.withOpacity(0.1),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -150,
-            left: -100,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    mainPurple.withOpacity(0.08),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: SafeArea(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header
-                      _buildGlassCard(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.store, color: accentPurple, size: 32),
-                            const SizedBox(width: 12),
-                            const Text(
-                              "RESELLER PANEL",
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // --- SECTION: BUAT AKUN PERMANEN (BARU) ---
-                      _buildGlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSectionTitle("Buat Akun Permanen", Icons.star, color: greenAccent),
-                            const Text(
-                              "Akun member tanpa masa berlaku (selamanya)",
-                              style: TextStyle(color: Colors.white54, fontSize: 11),
-                            ),
-                            const SizedBox(height: 12),
-
-                            _buildGlassInputField(
-                              controller: _permUser,
-                              label: "Username",
-                              icon: Icons.person_outline,
-                            ),
-
-                            _buildGlassInputField(
-                              controller: _permPass,
-                              label: "Password",
-                              icon: Icons.lock_outline,
-                              obscureText: true,
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            _buildActionButton(
-                              text: "BUAT AKUN PERMANEN",
-                              icon: Icons.star,
-                              onPressed: _createPermanent,
-                              color: greenAccent,
-                              isLoading: loading,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // --- SECTION: BUAT AKUN BIAYA (dengan durasi) ---
-                      _buildGlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSectionTitle("Buat Akun Berbayar", Icons.person_add),
-
-                            _buildGlassInputField(
-                              controller: _newUser,
-                              label: "Username",
-                              icon: Icons.person_outline,
-                            ),
-
-                            _buildGlassInputField(
-                              controller: _newPass,
-                              label: "Password",
-                              icon: Icons.lock_outline,
-                              obscureText: true,
-                            ),
-
-                            _buildGlassInputField(
-                              controller: _days,
-                              label: "Durasi (hari)",
-                              icon: Icons.calendar_today,
-                              keyboardType: TextInputType.number,
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            _buildActionButton(
-                              text: "BUAT AKUN",
-                              icon: Icons.person_add,
-                              onPressed: _create,
-                              color: mainPurple,
-                              isLoading: loading,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // --- SECTION: UBAH DURASI ---
-                      _buildGlassCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSectionTitle("Tambah Durasi", Icons.edit_calendar),
-
-                            _buildGlassInputField(
-                              controller: _editUser,
-                              label: "Username",
-                              icon: Icons.person_outline,
-                            ),
-
-                            _buildGlassInputField(
-                              controller: _editDays,
-                              label: "Tambah Hari",
-                              icon: Icons.calendar_today,
-                              keyboardType: TextInputType.number,
-                            ),
-
-                            const SizedBox(height: 8),
-
-                            _buildActionButton(
-                              text: "TAMBAH DURASI",
-                              icon: Icons.edit,
-                              onPressed: _edit,
-                              color: deepPurple,
-                              isLoading: loading,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Info card
-                      _buildGlassCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info, color: greenAccent, size: 20),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Akun Permanen vs Berbayar",
-                                    style: TextStyle(
-                                      color: greenAccent,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "• Akun PERMANEN: Tidak ada masa berlaku (selamanya)\n• Akun BERBAYAR: Memiliki masa berlaku sesuai durasi yang dipilih",
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -6031,6 +4796,1242 @@ class _AnimatedLoginButtonState extends State<_AnimatedLoginButton>
                       ),
                     ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// chat_page.dart (Dengan Reply & Persegi Panjang - FIXED)
+
+class ChatTheme {
+
+
+
+
+  static const accent1 = Color(0xFF00E5FF);
+
+
+
+
+
+  static const textPrimary = Color(0xFFF5F5FF);
+
+
+
+}
+
+class ChatPage extends StatefulWidget {
+
+
+  
+  const ChatPage({
+    super.key,
+    required this.username,
+    required this.sessionKey,
+  });
+
+  @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  WebSocketChannel? _channel;
+  
+  // Global chat
+  List<dynamic> _globalMessages = [];
+  bool _globalLoading = true;
+  final TextEditingController _globalInputCtrl = TextEditingController();
+  final ScrollController _globalScrollCtrl = ScrollController();
+  Map<String, dynamic>? _globalReplyTo;
+  
+  // Private chat
+  List<dynamic> _privateChats = [];
+  List<dynamic> _privateMessages = [];
+
+  bool _privateLoading = true;
+  final TextEditingController _privateInputCtrl = TextEditingController();
+  final ScrollController _privateScrollCtrl = ScrollController();
+  Map<String, dynamic>? _privateReplyTo;
+  
+  // Profile
+  Map<String, dynamic> _myProfile = {};
+  
+  // Search
+  final TextEditingController _searchCtrl = TextEditingController();
+  List<dynamic> _searchResults = [];
+  
+  // Base URL
+
+  String? _wsUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _initialize();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _channel?.sink.close();
+    _globalInputCtrl.dispose();
+    _globalScrollCtrl.dispose();
+    _privateInputCtrl.dispose();
+    _privateScrollCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      _baseUrl = await ApiConfig.baseUrl;
+      _wsUrl = await ApiConfig.urlRat;
+      print('✅ Chat Base URL: $_baseUrl');
+      print('✅ Chat WS URL: $_wsUrl');
+      
+      _loadProfile();
+      _connectWebSocket();
+      _loadGlobalMessages();
+      _loadPrivateChats();
+    } catch (e) {
+      print('❌ Failed to initialize chat: $e');
+    }
+  }
+
+  Future<void> _loadProfile() async {
+    if (_baseUrl == null) return;
+    try {
+
+
+      final res = await http.get(Uri.parse('$_baseUrl/chat/profile?key=$sessionKey'));
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() => _myProfile = data['profile']);
+        }
+      }
+    } catch (e) { print('Profile load error: $e'); }
+  }
+
+  void _connectWebSocket() async {
+    try {
+
+
+      
+      // Gunakan wsUrl dari ApiConfig
+      final wsUrl = _wsUrl ?? 'ws://serverku.lynzzofficial.com:2099';
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _channel!.stream.listen(_handleWebSocketMessage, onError: (e) {
+        print('WebSocket error: $e');
+      });
+      _channel!.sink.add(jsonEncode({ 'type': 'auth', 'key': sessionKey }));
+    } catch (e) { print('Connection error: $e'); }
+  }
+  
+  void _handleWebSocketMessage(dynamic data) {
+    try {
+      final msg = jsonDecode(data);
+      if (msg['type'] == 'global_message') {
+        _addGlobalMessage(msg['message']);
+      } else if (msg['type'] == 'private_message') {
+        _addPrivateMessage(msg['message']);
+      } else if (msg['type'] == 'refresh_chat_list') {
+        _loadPrivateChats();
+      }
+    } catch (e) { print('Parse error: $e'); }
+  }
+
+  // ==================== GLOBAL CHAT METHODS ====================
+  
+  Future<void> _loadGlobalMessages() async {
+    if (_baseUrl == null) return;
+    try {
+
+
+      final res = await http.get(Uri.parse('$_baseUrl/chat/global/messages?key=$sessionKey&limit=100'));
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() {
+            _globalMessages = data['messages'];
+            _globalLoading = false;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom(_globalScrollCtrl);
+          });
+        }
+      }
+    } catch (e) { if (mounted) setState(() => _globalLoading = false); }
+  }
+  
+  void _addGlobalMessage(dynamic msg) {
+    setState(() => _globalMessages.add(msg));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(_globalScrollCtrl);
+    });
+  }
+  
+  void _scrollToBottom(ScrollController controller) {
+    if (controller.hasClients) {
+      controller.animateTo(
+        controller.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+  
+  Future<void> _sendGlobalMessage() async {
+    if (_baseUrl == null) return;
+    String text = _globalInputCtrl.text.trim();
+    if (text.isEmpty && _globalReplyTo == null) return;
+    
+    String finalText = text;
+    if (_globalReplyTo != null) {
+      finalText = '@${_globalReplyTo!['sender']} ${text}';
+    }
+    
+    setState(() => _globalInputCtrl.text = '');
+    
+    try {
+
+
+      final body = jsonEncode({ 
+        'message': finalText, 
+        'type': 'text',
+        'replyTo': _globalReplyTo?['id']
+      });
+      
+      final res = await http.post(
+        Uri.parse('$_baseUrl/chat/global/send?key=$sessionKey'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+      
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() => _globalReplyTo = null);
+          _loadGlobalMessages();
+        }
+      }
+    } catch (e) { print('Send error: $e'); }
+  }
+
+  // ==================== PRIVATE CHAT METHODS ====================
+  
+  Future<void> _loadPrivateChats() async {
+    if (_baseUrl == null) return;
+    try {
+
+
+      final res = await http.get(Uri.parse('$_baseUrl/chat/private/users?key=$sessionKey'));
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() {
+            _privateChats = data['users'];
+            _privateLoading = false;
+          });
+        }
+      }
+    } catch (e) { if (mounted) setState(() => _privateLoading = false); }
+  }
+  
+  Future<void> _loadPrivateMessages(String withUser) async {
+    if (_baseUrl == null) return;
+    setState(() => _privateLoading = true);
+    try {
+
+
+      final res = await http.get(Uri.parse('$_baseUrl/chat/private/messages/$withUser?key=$sessionKey&limit=100'));
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() {
+            _privateMessages = data['messages'];
+            _privateLoading = false;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom(_privateScrollCtrl);
+          });
+          
+          await http.post(Uri.parse('$_baseUrl/chat/private/mark-read/$withUser?key=$sessionKey'));
+        }
+      }
+    } catch (e) { setState(() => _privateLoading = false); }
+  }
+  
+  void _addPrivateMessage(dynamic msg) {
+    final isCurrentChat = _selectedUser == msg['sender'] || _selectedUser == msg['receiver'];
+    if (isCurrentChat) {
+      setState(() => _privateMessages.add(msg));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom(_privateScrollCtrl);
+      });
+    }
+    _loadPrivateChats();
+  }
+  
+  Future<void> _sendPrivateMessage() async {
+    if (_baseUrl == null) return;
+    String text = _privateInputCtrl.text.trim();
+    if (text.isEmpty || _selectedUser == null) return;
+
+    if (_privateReplyTo != null) {
+      finalText = '@${_privateReplyTo!['sender']} ${text}';
+    }
+    
+    setState(() => _privateInputCtrl.text = '');
+    
+    try {
+
+
+      final body = jsonEncode({ 
+        'message': finalText, 
+        'type': 'text',
+        'replyTo': _privateReplyTo?['id']
+      });
+      
+      final res = await http.post(
+        Uri.parse('$_baseUrl/chat/private/send/${_selectedUser}?key=$sessionKey'),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      );
+      
+      if (res.statusCode == 200) {
+
+        if (data['valid'] == true) {
+          setState(() => _privateReplyTo = null);
+          _loadPrivateMessages(_selectedUser!);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(data['error'] ?? 'Gagal mengirim pesan')),
+          );
+        }
+      }
+    } catch (e) { 
+      print('Send error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+  
+  Future<void> _searchAndStartChat() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _SearchUserSheet(
+        sessionKey: widget.sessionKey,
+        currentUsername: widget.username,
+        onSelectUser: (user) {
+          Navigator.pop(ctx);
+          setState(() {
+            _selectedUser = user['username'];
+            _privateReplyTo = null;
+          });
+          _loadPrivateMessages(user['username']);
+          _tabController.animateTo(1);
+        },
+      ),
+    );
+  }
+
+  String _formatTime(String? timestamp) {
+    if (timestamp == null) return '';
+    try {
+      final time = DateTime.parse(timestamp);
+
+      final diff = now.difference(time);
+      if (diff.inSeconds < 60) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) { return ''; }
+  }
+
+  // ==================== BUILD WIDGETS ====================
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: ChatTheme.bg,
+      appBar: _buildAppBar(),
+      body: Column(
+        children: [
+          // Tab Bar - PERSEGI PANJANG SETENGAH KOTAK
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            height: 48,
+            decoration: BoxDecoration(
+              color: ChatTheme.surface2,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  colors: [ChatTheme.accent1, ChatTheme.accent2],
+                ),
+              ),
+              labelColor: Colors.white,
+              unselectedLabelColor: ChatTheme.textMuted,
+              dividerColor: Colors.transparent,
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontSize: 13),
+              indicatorSize: TabBarIndicatorSize.tab,
+              tabs: const [
+                Tab(icon: Icon(Icons.public_rounded, size: 18), text: 'GLOBAL'),
+                Tab(icon: Icon(Icons.lock_rounded, size: 18), text: 'PRIVATE'),
+              ],
+            ),
+          ),
+          // Tab View
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildGlobalChat(),
+                _buildPrivateChat(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      backgroundColor: ChatTheme.surface,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded, color: ChatTheme.textPrimary),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CELTICS CHAT',
+            style: TextStyle(
+              color: ChatTheme.textMuted,
+              fontSize: 10,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            '@${widget.username}',
+            style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11),
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: ChatTheme.accent1),
+          onPressed: () {
+            _loadGlobalMessages();
+            _loadPrivateChats();
+            if (_selectedUser != null) _loadPrivateMessages(_selectedUser!);
+          },
+        ),
+      ],
+    );
+  }
+
+  // ==================== GLOBAL CHAT TAB ====================
+  
+  Widget _buildGlobalChat() {
+    return Column(
+      children: [
+        if (_globalReplyTo != null) _buildReplyPreviewBar(isGlobal: true),
+        Expanded(
+          child: _globalLoading
+              ? const Center(child: CircularProgressIndicator(color: ChatTheme.accent1))
+              : _globalMessages.isEmpty
+                  ? _buildEmptyState('Belum ada pesan', 'Jadilah yang pertama mengirim pesan!')
+                  : ListView.builder(
+                      controller: _globalScrollCtrl,
+                      padding: const EdgeInsets.only(bottom: 80),
+                      itemCount: _globalMessages.length,
+                      itemBuilder: (ctx, i) => _buildGlobalMessageBubble(_globalMessages[i]),
+                    ),
+        ),
+        _buildInputBar(
+          controller: _globalInputCtrl,
+          onSend: _sendGlobalMessage,
+          hint: 'Type a message...',
+          isGlobal: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlobalMessageBubble(dynamic msg) {
+    final isMe = msg['sender'] == widget.username;
+    final profile = msg['senderProfile'] ?? {};
+    final name = profile['name'] ?? msg['sender'];
+    final replyTo = msg['replyTo'];
+    
+    return GestureDetector(
+      onLongPress: () {
+        setState(() {
+          _globalReplyTo = {
+            'id': msg['id'],
+            'sender': msg['sender'],
+            'message': msg['message'],
+          };
+        });
+      },
+      child: Container(
+        margin: EdgeInsets.only(
+          left: isMe ? 60 : 12,
+          right: isMe ? 12 : 60,
+          top: 8,
+          bottom: 8,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isMe) ...[
+              GestureDetector(
+                onTap: () {
+                  if (msg['sender'] != widget.username) {
+                    setState(() {
+                      _selectedUser = msg['sender'];
+                      _privateReplyTo = null;
+                    });
+                    _loadPrivateMessages(msg['sender']);
+                    _tabController.animateTo(1);
+                  }
+                },
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: ChatTheme.surface3,
+                  child: Text(name[0].toUpperCase(), style: TextStyle(color: ChatTheme.accent1)),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  if (!isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 4),
+                      child: Text(name, style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11)),
+                    ),
+                  if (replyTo != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: ChatTheme.surface3,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border(left: BorderSide(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, width: 3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Replying to @${replyTo['sender']}',
+                            style: TextStyle(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, fontSize: 10),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            replyTo['message'] ?? '',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isMe ? ChatTheme.accent2.withOpacity(0.2) : ChatTheme.surface2,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: isMe ? ChatTheme.accent2.withOpacity(0.3) : ChatTheme.surface3),
+                    ),
+                    child: Text(
+                      msg['message'] ?? '',
+                      style: TextStyle(
+                        color: isMe ? ChatTheme.accent1 : ChatTheme.textPrimary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 8, top: 4),
+                    child: Text(
+                      _formatTime(msg['timestamp']),
+                      style: TextStyle(color: ChatTheme.textMuted, fontSize: 9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== PRIVATE CHAT TAB ====================
+  
+  Widget _buildPrivateChat() {
+
+  }
+
+  Widget _buildChatList() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: GestureDetector(
+            onTap: _searchAndStartChat,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: ChatTheme.surface2,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ChatTheme.surface3),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.search_rounded, color: ChatTheme.textMuted),
+                  const SizedBox(width: 12),
+                  Text('Cari user baru...', style: TextStyle(color: ChatTheme.textMuted)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _privateChats.isEmpty
+              ? _buildEmptyState('Belum ada chat', 'Cari user untuk memulai percakapan private!')
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _privateChats.length,
+                  itemBuilder: (ctx, i) => _buildChatListItem(_privateChats[i]),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatListItem(dynamic chat) {
+    final profile = chat['profile'] ?? {};
+    final lastMsg = chat['lastMessage'];
+    final isUnread = lastMsg != null && lastMsg['sender'] != widget.username && lastMsg['read'] != true;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedUser = chat['username'];
+          _privateReplyTo = null;
+        });
+        _loadPrivateMessages(chat['username']);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isUnread ? ChatTheme.accent1.withOpacity(0.1) : ChatTheme.surface2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isUnread ? ChatTheme.accent1.withOpacity(0.3) : ChatTheme.surface3),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: ChatTheme.surface3,
+              child: Text(chat['username'][0].toUpperCase(),
+                  style: TextStyle(color: ChatTheme.accent1, fontSize: 18)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        profile['name'] ?? chat['username'],
+                        style: TextStyle(
+                          color: ChatTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isUnread)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: ChatTheme.accent1,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (lastMsg != null)
+                    Text(
+                      '${lastMsg['sender'] == widget.username ? "You: " : ""}${lastMsg['message'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isUnread ? ChatTheme.textSecondary : ChatTheme.textMuted,
+                        fontSize: 12,
+                        fontWeight: isUnread ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (lastMsg != null)
+              Text(
+                _formatTime(lastMsg['timestamp']),
+                style: TextStyle(color: ChatTheme.textMuted, fontSize: 10),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatHeader() {
+    final profile = _privateChats.firstWhere(
+      (c) => c['username'] == _selectedUser,
+      orElse: () => ({'profile': {}}),
+    )['profile'] ?? {};
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: ChatTheme.surface,
+        border: Border(bottom: BorderSide(color: ChatTheme.surface2)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: ChatTheme.textPrimary),
+            onPressed: () => setState(() {
+              _selectedUser = null;
+              _privateReplyTo = null;
+            }),
+          ),
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: ChatTheme.surface3,
+            child: Text(_selectedUser![0].toUpperCase(),
+                style: TextStyle(color: ChatTheme.accent1, fontSize: 16)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile['name'] ?? _selectedUser!,
+                  style: TextStyle(color: ChatTheme.textPrimary, fontWeight: FontWeight.w600),
+                ),
+                if (profile['bio'] != null && profile['bio'].isNotEmpty)
+                  Text(
+                    profile['bio'],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: ChatTheme.textMuted, fontSize: 10),
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: ChatTheme.accent2.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: ChatTheme.accent2.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_rounded, color: ChatTheme.accent2, size: 12),
+                const SizedBox(width: 4),
+                Text('PRIVATE', style: TextStyle(color: ChatTheme.accent2, fontSize: 9, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivateMessageBubble(dynamic msg) {
+    final isMe = msg['fromMe'] == true;
+
+    
+    return GestureDetector(
+      onLongPress: () {
+        setState(() {
+          _privateReplyTo = {
+            'id': msg['id'],
+            'sender': msg['sender'],
+            'message': msg['message'],
+          };
+        });
+      },
+      child: Container(
+        margin: EdgeInsets.only(
+          left: isMe ? 60 : 12,
+          right: isMe ? 12 : 60,
+          top: 8,
+          bottom: 8,
+        ),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (replyTo != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: ChatTheme.surface3,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(left: BorderSide(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, width: 3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Replying to @${replyTo['sender']}',
+                      style: TextStyle(color: isMe ? ChatTheme.accent2 : ChatTheme.accent1, fontSize: 10),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      replyTo['message'] ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMe ? ChatTheme.accent2.withOpacity(0.2) : ChatTheme.surface2,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isMe ? ChatTheme.accent2.withOpacity(0.3) : ChatTheme.surface3),
+              ),
+              child: Text(
+                msg['message'] ?? '',
+                style: TextStyle(
+                  color: isMe ? ChatTheme.accent1 : ChatTheme.textPrimary,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 8, right: 8, top: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: ChatTheme.accent2.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.lock_outline_rounded, color: ChatTheme.accent2, size: 8),
+                        const SizedBox(width: 2),
+                        Text('E2EE', style: TextStyle(color: ChatTheme.accent2, fontSize: 7)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _formatTime(msg['timestamp']),
+                    style: TextStyle(color: ChatTheme.textMuted, fontSize: 9),
+                  ),
+                  if (isMe && msg['read'] == true)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4),
+                      child: Icon(Icons.done_all_rounded, color: ChatTheme.accent1, size: 10),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== REPLY PREVIEW BAR ====================
+  
+  Widget _buildReplyPreviewBar({required bool isGlobal}) {
+    final replyData = isGlobal ? _globalReplyTo : _privateReplyTo;
+    if (replyData == null) return const SizedBox();
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: ChatTheme.surface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: ChatTheme.accent1, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.reply_rounded, color: ChatTheme.accent1, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Replying to @${replyData['sender']}',
+                  style: TextStyle(color: ChatTheme.accent1, fontSize: 10),
+                ),
+                Text(
+                  replyData['message'] ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: ChatTheme.textSecondary, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() {
+              if (isGlobal) _globalReplyTo = null;
+
+            }),
+            child: Icon(Icons.close_rounded, color: ChatTheme.textMuted, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== INPUT BAR ====================
+  
+  Widget _buildInputBar({
+    required TextEditingController controller,
+    required VoidCallback onSend,
+    required String hint,
+    required bool isGlobal,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: ChatTheme.surface,
+        boxShadow: [
+          BoxShadow(color: ChatTheme.shadowHeavy, blurRadius: 8, offset: const Offset(0, -2)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: ChatTheme.surface2,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ChatTheme.surface3),
+              ),
+              child: TextField(
+                controller: controller,
+                style: TextStyle(color: ChatTheme.textPrimary),
+                decoration: InputDecoration(
+                  hintText: hint,
+                  hintStyle: TextStyle(color: ChatTheme.textMuted),
+                  border: InputBorder.none,
+                ),
+                onSubmitted: (_) => onSend(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onSend,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [ChatTheme.accent1, ChatTheme.accent2]),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String title, String message) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.chat_bubble_outline_rounded, color: ChatTheme.textMuted, size: 48),
+          const SizedBox(height: 16),
+          Text(title, style: TextStyle(color: ChatTheme.textSecondary, fontSize: 16)),
+          const SizedBox(height: 8),
+          Text(message, style: TextStyle(color: ChatTheme.textMuted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== SEARCH USER SHEET ====================
+
+class _SearchUserSheet extends StatefulWidget {
+
+  final String currentUsername;
+  final Function(Map<String, dynamic>) onSelectUser;
+  
+  const _SearchUserSheet({
+    required this.sessionKey,
+    required this.currentUsername,
+    required this.onSelectUser,
+  });
+
+  @override
+  State<_SearchUserSheet> createState() => _SearchUserSheetState();
+}
+
+class _SearchUserSheetState extends State<_SearchUserSheet> {
+
+  List<dynamic> _results = [];
+
+  Timer? _debounce;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBaseUrl();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBaseUrl() async {
+    try {
+      _baseUrl = await ApiConfig.baseUrl;
+    } catch (e) {
+      print('Failed to load base URL: $e');
+    }
+  }
+
+  void _search(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (_baseUrl == null) return;
+      if (query.length < 2) {
+        setState(() => _results = []);
+        return;
+      }
+      setState(() => _loading = true);
+      try {
+
+
+        final res = await http.get(Uri.parse('$_baseUrl/chat/search-users?key=$sessionKey&q=$query'));
+        if (res.statusCode == 200) {
+
+          if (data['valid'] == true) {
+            setState(() => _results = data['users'] ?? []);
+          }
+        }
+      } catch (e) { print('Search error: $e'); }
+      setState(() => _loading = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: BoxDecoration(
+            color: ChatTheme.surface,
+            boxShadow: [BoxShadow(color: ChatTheme.shadowHeavy, blurRadius: 20)],
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ChatTheme.textMuted,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [ChatTheme.accent1, ChatTheme.accent2]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        'CARI USER',
+                        style: TextStyle(
+                          color: ChatTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: ChatTheme.surface2,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.close_rounded, color: ChatTheme.textMuted, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: _search,
+                  style: TextStyle(color: ChatTheme.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Masukkan username...',
+                    hintStyle: TextStyle(color: ChatTheme.textMuted),
+                    prefixIcon: Icon(Icons.person_search_rounded, color: ChatTheme.accent1),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: ChatTheme.surface3),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: ChatTheme.accent1),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: ChatTheme.accent1))
+                    : _results.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.person_off_rounded, color: ChatTheme.textMuted, size: 48),
+                                const SizedBox(height: 12),
+                                Text('Tidak ada user ditemukan', style: TextStyle(color: ChatTheme.textSecondary)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _results.length,
+                            itemBuilder: (ctx, i) {
+                              final user = _results[i];
+                              final profile = user['profile'] ?? {};
+                              return GestureDetector(
+                                onTap: () => widget.onSelectUser(user),
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: ChatTheme.surface2,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: ChatTheme.surface3),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 24,
+                                        backgroundColor: ChatTheme.surface3,
+                                        child: Text(user['username'][0].toUpperCase(),
+                                            style: TextStyle(color: ChatTheme.accent1, fontSize: 18)),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              profile['name'] ?? user['username'],
+                                              style: TextStyle(
+                                                color: ChatTheme.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            if (profile['bio'] != null && profile['bio'].isNotEmpty)
+                                              Text(
+                                                profile['bio'],
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(color: ChatTheme.textMuted, fontSize: 11),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: ChatTheme.accent2.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          user['role']?.toUpperCase() ?? 'MEMBER',
+                                          style: TextStyle(color: ChatTheme.accent2, fontSize: 9),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+              ),
+            ],
           ),
         ),
       ),
