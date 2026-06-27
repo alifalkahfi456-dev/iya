@@ -43,7 +43,7 @@ class PreviewPlaceholder extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'login_page.dart',
+                    'dashboard_page.dart',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       color: const Color(0xFFE0E0FF),
